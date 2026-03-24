@@ -10,10 +10,24 @@ export type TrpcContext = {
 export async function createContext(
   opts: CreateExpressContextOptions
 ): Promise<TrpcContext> {
+  const user = await resolveUserFromAuthHeader(opts.req.headers.authorization);
+
+  return {
+    req: opts.req,
+    res: opts.res,
+    user,
+  };
+}
+
+export async function resolveUserFromAuthHeader(
+  authorizationHeader: string | string[] | undefined
+): Promise<AppUser | null> {
   let user: AppUser | null = null;
 
   try {
-    const authHeader = opts.req.headers.authorization;
+    const authHeader = Array.isArray(authorizationHeader)
+      ? authorizationHeader[0]
+      : authorizationHeader;
     const accessToken =
       typeof authHeader === "string" && authHeader.startsWith("Bearer ")
         ? authHeader.slice("Bearer ".length)
@@ -24,9 +38,5 @@ export async function createContext(
     user = null;
   }
 
-  return {
-    req: opts.req,
-    res: opts.res,
-    user,
-  };
+  return user;
 }
