@@ -568,7 +568,7 @@ export async function getAllInquiries() {
 
 export async function getOwnerMessages(ownerId: string) {
   const ownerProperties = await getOwnerProperties(ownerId);
-  const propertyIds = ownerProperties.map(property => property.id);
+  const propertyIds = ownerProperties.map((property: PropertyRecord) => property.id);
 
   if (propertyIds.length === 0) {
     return [] as OwnerMessageRecord[];

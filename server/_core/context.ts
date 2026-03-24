@@ -1,16 +1,17 @@
-import type { Request, Response } from "express";
+import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
 import { getUserFromAccessToken, type AppUser } from "../db";
 
 export type TrpcContext = {
-  req: Request;
-  res: Response;
+  req: ExpressRequest;
+  res: ExpressResponse;
   user: AppUser | null;
 };
 
 export async function createContext(
-  opts: { req: Request; res: Response }
+  opts: { req: ExpressRequest; res: ExpressResponse }
 ): Promise<TrpcContext> {
-  const user = await resolveUserFromAuthHeader(opts.req.headers.authorization);
+  const authorizationHeader = opts.req.header("authorization");
+  const user = await resolveUserFromAuthHeader(authorizationHeader);
 
   return {
     req: opts.req,
