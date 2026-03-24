@@ -1,8 +1,8 @@
-import "../server/_core/loadEnv";
+import "../../server/_core/loadEnv";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { appRouter } from "../server/routers";
-import { resolveUserFromAuthHeader } from "../server/_core/context";
+import type { IncomingMessage, ServerResponse } from "http";
+import { appRouter } from "../../server/routers";
+import { resolveUserFromAuthHeader } from "../../server/_core/context";
 
 export const config = {
   runtime: "nodejs",
@@ -39,7 +39,18 @@ function toRequest(req: VercelRequest): Request {
   });
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+type VercelLikeRequest = IncomingMessage & {
+  url?: string;
+  method?: string;
+  body?: unknown;
+  headers: IncomingMessage["headers"];
+};
+
+type VercelLikeResponse = ServerResponse<IncomingMessage> & {
+  send: (body: Buffer | string) => void;
+};
+
+export default async function handler(req: VercelLikeRequest, res: VercelLikeResponse) {
   const request = toRequest(req);
 
   const response = await fetchRequestHandler({
@@ -51,7 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res,
       user: await resolveUserFromAuthHeader(req.headers.authorization),
     }),
-    onError({ error, path }) {
+    onError({ error, path }: { error: unknown; path: string | undefined }) {
       console.error(`[tRPC] ${path ?? "<unknown>"} failed:`, error);
     },
   });
