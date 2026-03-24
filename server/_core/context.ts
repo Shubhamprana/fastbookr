@@ -10,7 +10,12 @@ export type TrpcContext = {
 export async function createContext(
   opts: { req: ExpressRequest; res: ExpressResponse }
 ): Promise<TrpcContext> {
-  const authorizationHeader = opts.req.header("authorization");
+  const authorizationValue = (opts.req as ExpressRequest & {
+    headers?: Record<string, string | string[] | undefined>;
+  }).headers?.authorization;
+  const authorizationHeader = Array.isArray(authorizationValue)
+    ? authorizationValue[0]
+    : authorizationValue;
   const user = await resolveUserFromAuthHeader(authorizationHeader);
 
   return {
