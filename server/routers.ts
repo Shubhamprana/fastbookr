@@ -236,7 +236,7 @@ export const appRouter = router({
         const { getOwnerProperties, getPropertyMessages } = await import("./db");
         if (ctx.user.role !== "admin") {
           const ownerProperties = await getOwnerProperties(ctx.user.id);
-          const allowed = ownerProperties.some(property => property.id === input.propertyId);
+          const allowed = ownerProperties.some((property: any) => property.id === input.propertyId);
           if (!allowed) {
             throw new Error("Unauthorized");
           }
@@ -260,7 +260,7 @@ export const appRouter = router({
         const { createOwnerMessage, getOwnerProperties } = await import("./db");
         if (ctx.user.role !== "admin") {
           const ownerProperties = await getOwnerProperties(ctx.user.id);
-          const allowed = ownerProperties.some(property => property.id === input.propertyId);
+          const allowed = ownerProperties.some((property: any) => property.id === input.propertyId);
           if (!allowed) {
             throw new Error("Unauthorized");
           }

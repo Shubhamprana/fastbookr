@@ -1,4 +1,4 @@
-import { createClient, type User as SupabaseAuthUser } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL ?? "";
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
@@ -268,7 +268,7 @@ function normalizePropertyPayload(property: Record<string, any>) {
   };
 }
 
-function inferLoginMethod(user: SupabaseAuthUser): string | null {
+function inferLoginMethod(user: any): string | null {
   const provider =
     user.app_metadata?.provider ??
     user.identities?.[0]?.provider ??
@@ -288,7 +288,7 @@ export async function getUserFromAccessToken(accessToken: string): Promise<AppUs
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser(accessToken);
+  } = await (supabase.auth as any).getUser(accessToken);
 
   if (authError || !user) {
     return null;

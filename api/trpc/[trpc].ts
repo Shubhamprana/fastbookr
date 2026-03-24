@@ -8,16 +8,28 @@ export const config = {
   runtime: "nodejs",
 };
 
-function toRequest(req: VercelRequest): Request {
+type VercelLikeRequest = IncomingMessage & {
+  url?: string;
+  method?: string;
+  body?: unknown;
+  headers: IncomingMessage["headers"];
+};
+
+type VercelLikeResponse = ServerResponse<IncomingMessage> & {
+  send: (body: Buffer | string) => void;
+};
+
+function toRequest(req: VercelLikeRequest): Request {
   const protocol = (req.headers["x-forwarded-proto"] as string | undefined) ?? "https";
-  const host = req.headers.host ?? "localhost";
+  const hostHeader = Array.isArray(req.headers.host) ? req.headers.host[0] : req.headers.host;
+  const host = typeof hostHeader === "string" && hostHeader.length > 0 ? hostHeader : "localhost";
   const url = new URL(req.url ?? "/", `${protocol}://${host}`);
 
   const headers = new Headers();
   Object.entries(req.headers).forEach(([key, value]) => {
     if (Array.isArray(value)) {
       value.forEach((item) => headers.append(key, item));
-    } else if (value !== undefined) {
+    } else if (typeof value === "string") {
       headers.set(key, value);
     }
   });
@@ -39,17 +51,6 @@ function toRequest(req: VercelRequest): Request {
   });
 }
 
-type VercelLikeRequest = IncomingMessage & {
-  url?: string;
-  method?: string;
-  body?: unknown;
-  headers: IncomingMessage["headers"];
-};
-
-type VercelLikeResponse = ServerResponse<IncomingMessage> & {
-  send: (body: Buffer | string) => void;
-};
-
 export default async function handler(req: VercelLikeRequest, res: VercelLikeResponse) {
   const request = toRequest(req);
 
@@ -67,7 +68,7 @@ export default async function handler(req: VercelLikeRequest, res: VercelLikeRes
     },
   });
 
-  res.status(response.status);
+  res.statusCode = response.status;
   response.headers.forEach((value, key) => {
     res.setHeader(key, value);
   });
