@@ -1,4 +1,3 @@
-import "../../server/_core/loadEnv";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { IncomingMessage, ServerResponse } from "http";
 import { appRouter } from "../../server/routers";
