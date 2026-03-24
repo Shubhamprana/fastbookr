@@ -1,5 +1,5 @@
-import { systemRouter } from "./_core/systemRouter";
-import { adminProcedure, publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { systemRouter } from "./_core/systemRouter.js";
+import { adminProcedure, publicProcedure, protectedProcedure, router } from "./_core/trpc.js";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -16,22 +16,22 @@ export const appRouter = router({
   // Property routes
   properties: router({
     getAll: publicProcedure.query(async () => {
-      const { getAllProperties } = await import('./db');
+      const { getAllProperties } = await import("./db.js");
       return getAllProperties();
     }),
 
     getAdminAll: adminProcedure.query(async () => {
-      const { getAdminProperties } = await import('./db');
+      const { getAdminProperties } = await import("./db.js");
       return getAdminProperties();
     }),
 
     getMine: protectedProcedure.query(async ({ ctx }) => {
-      const { getOwnerProperties } = await import("./db");
+      const { getOwnerProperties } = await import("./db.js");
       return getOwnerProperties(ctx.user.id);
     }),
     
     getFeatured: publicProcedure.query(async () => {
-      const { getFeaturedProperties } = await import('./db');
+      const { getFeaturedProperties } = await import("./db.js");
       return getFeaturedProperties();
     }),
     
@@ -43,7 +43,7 @@ export const appRouter = router({
         return val as { id: number };
       })
       .query(async ({ input, ctx }) => {
-        const { getAdminPropertyById, getPropertyById } = await import('./db');
+        const { getAdminPropertyById, getPropertyById } = await import("./db.js");
         const property = await getPropertyById(input.id);
         if (property) return property;
         if (ctx.user?.role === "admin") {
@@ -55,19 +55,19 @@ export const appRouter = router({
     search: publicProcedure
       .input((val: unknown) => val as any)
       .query(async ({ input }) => {
-        const { searchProperties } = await import('./db');
+        const { searchProperties } = await import("./db.js");
         return searchProperties(input);
       }),
 
     submitOwnerListing: protectedProcedure
       .input((val: unknown) => val as any)
       .mutation(async ({ input, ctx }) => {
-        const { createOwnerListing } = await import("./db");
+        const { createOwnerListing } = await import("./db.js");
         const listing = await createOwnerListing({
           ...input,
           createdBy: ctx.user.id,
         });
-        const { sendAdminAlert } = await import("./_core/email");
+        const { sendAdminAlert } = await import("./_core/email.js");
         await sendAdminAlert(
           `New owner listing submitted: ${listing.title}`,
           [
@@ -85,14 +85,14 @@ export const appRouter = router({
     create: adminProcedure
       .input((val: unknown) => val as any)
       .mutation(async ({ input, ctx }) => {
-        const { createProperty } = await import('./db');
+        const { createProperty } = await import("./db.js");
         return createProperty({ ...input, createdBy: ctx.user.id });
       }),
     
     update: adminProcedure
       .input((val: unknown) => val as any)
       .mutation(async ({ input }) => {
-        const { getAdminPropertyById, updateProperty } = await import('./db');
+        const { getAdminPropertyById, updateProperty } = await import("./db.js");
         const before = await getAdminPropertyById(input.id);
         const { id, ...data } = input;
         const updated = await updateProperty(id, data);
@@ -102,7 +102,7 @@ export const appRouter = router({
           before.approvalStatus !== updated.approvalStatus &&
           updated.ownerEmail
         ) {
-          const { sendEmail } = await import("./_core/email");
+          const { sendEmail } = await import("./_core/email.js");
           await sendEmail({
             to: [{ email: updated.ownerEmail, name: updated.ownerName || "Owner" }],
             subject: `Listing ${updated.approvalStatus}: ${updated.title}`,
@@ -126,7 +126,7 @@ export const appRouter = router({
         return val as { id: number };
       })
       .mutation(async ({ input }) => {
-        const { deleteProperty } = await import('./db');
+        const { deleteProperty } = await import("./db.js");
         return deleteProperty(input.id);
       }),
   }),
@@ -136,7 +136,7 @@ export const appRouter = router({
     image: protectedProcedure
       .input((val: unknown) => val as { base64: string; filename: string; contentType: string })
       .mutation(async ({ input }) => {
-        const { uploadPropertyImage } = await import('./db');
+        const { uploadPropertyImage } = await import("./db.js");
         const { nanoid } = await import('nanoid');
         const suffix = nanoid(8);
         const ext = input.filename.split('.').pop() || 'jpg';
@@ -152,9 +152,9 @@ export const appRouter = router({
     create: publicProcedure
       .input((val: unknown) => val as any)
       .mutation(async ({ input }) => {
-        const { createInquiry } = await import('./db');
-        const { notifyOwner } = await import('./_core/notification');
-        const { sendAdminAlert } = await import("./_core/email");
+        const { createInquiry } = await import("./db.js");
+        const { notifyOwner } = await import("./_core/notification.js");
+        const { sendAdminAlert } = await import("./_core/email.js");
         
         const result = await createInquiry(input);
         
@@ -185,7 +185,7 @@ export const appRouter = router({
     
     getAll: adminProcedure
       .query(async () => {
-        const { getAllInquiries } = await import('./db');
+        const { getAllInquiries } = await import("./db.js");
         return getAllInquiries();
       }),
     
@@ -197,7 +197,7 @@ export const appRouter = router({
         return val as { propertyId: number };
       })
       .query(async ({ input }) => {
-        const { getInquiriesByProperty } = await import('./db');
+        const { getInquiriesByProperty } = await import("./db.js");
         return getInquiriesByProperty(input.propertyId);
       }),
 
@@ -214,14 +214,14 @@ export const appRouter = router({
         return val as { id: number; status: "new" | "contacted" | "closed" };
       })
       .mutation(async ({ input }) => {
-        const { updateInquiryStatus } = await import("./db");
+        const { updateInquiryStatus } = await import("./db.js");
         return updateInquiryStatus(input.id, input.status);
       }),
   }),
 
   ownerMessages: router({
     getMine: protectedProcedure.query(async ({ ctx }) => {
-      const { getOwnerMessages } = await import("./db");
+      const { getOwnerMessages } = await import("./db.js");
       return getOwnerMessages(ctx.user.id);
     }),
 
@@ -233,7 +233,7 @@ export const appRouter = router({
         return val as { propertyId: number };
       })
       .query(async ({ input, ctx }) => {
-        const { getOwnerProperties, getPropertyMessages } = await import("./db");
+        const { getOwnerProperties, getPropertyMessages } = await import("./db.js");
         if (ctx.user.role !== "admin") {
           const ownerProperties = await getOwnerProperties(ctx.user.id);
           const allowed = ownerProperties.some((property: any) => property.id === input.propertyId);
@@ -257,7 +257,7 @@ export const appRouter = router({
         return val as { propertyId: number; content: string };
       })
       .mutation(async ({ input, ctx }) => {
-        const { createOwnerMessage, getOwnerProperties } = await import("./db");
+        const { createOwnerMessage, getOwnerProperties } = await import("./db.js");
         if (ctx.user.role !== "admin") {
           const ownerProperties = await getOwnerProperties(ctx.user.id);
           const allowed = ownerProperties.some((property: any) => property.id === input.propertyId);
@@ -271,9 +271,9 @@ export const appRouter = router({
           content: input.content,
         });
 
-        const { getAdminPropertyById } = await import("./db");
+        const { getAdminPropertyById } = await import("./db.js");
         const property = await getAdminPropertyById(input.propertyId);
-        const { sendAdminAlert, sendEmail } = await import("./_core/email");
+        const { sendAdminAlert, sendEmail } = await import("./_core/email.js");
 
         if (ctx.user.role === "admin" && property?.ownerEmail) {
           await sendEmail({
@@ -301,7 +301,7 @@ export const appRouter = router({
 
   platformSettings: router({
     get: publicProcedure.query(async () => {
-      const { getPlatformSettings } = await import("./db");
+      const { getPlatformSettings } = await import("./db.js");
       return getPlatformSettings();
     }),
 
@@ -325,7 +325,7 @@ export const appRouter = router({
         };
       })
       .mutation(async ({ input }) => {
-        const { upsertPlatformSettings } = await import("./db");
+        const { upsertPlatformSettings } = await import("./db.js");
         return upsertPlatformSettings(input);
       }),
   }),
@@ -351,9 +351,9 @@ export const appRouter = router({
         };
       })
       .mutation(async ({ input }) => {
-        const { createContactMessage } = await import("./db");
+        const { createContactMessage } = await import("./db.js");
         const message = await createContactMessage(input);
-        const { sendAdminAlert } = await import("./_core/email");
+        const { sendAdminAlert } = await import("./_core/email.js");
         await sendAdminAlert(
           `New contact form message from ${input.name}`,
           [
@@ -368,7 +368,7 @@ export const appRouter = router({
       }),
 
     getAll: adminProcedure.query(async () => {
-      const { getAllContactMessages } = await import("./db");
+      const { getAllContactMessages } = await import("./db.js");
       return getAllContactMessages();
     }),
 
@@ -385,7 +385,7 @@ export const appRouter = router({
         return val as { id: number; status: "new" | "reviewed" | "closed" };
       })
       .mutation(async ({ input }) => {
-        const { updateContactMessageStatus } = await import("./db");
+        const { updateContactMessageStatus } = await import("./db.js");
         return updateContactMessageStatus(input.id, input.status);
       }),
   }),

@@ -1,7 +1,8 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { IncomingMessage, ServerResponse } from "http";
-import { appRouter } from "../../server/routers";
-import { resolveUserFromAuthHeader } from "../../server/_core/context";
+import { appRouter } from "../../server/routers.js";
+import { resolveUserFromAuthHeader } from "../../server/_core/context.js";
+import type { TrpcContext } from "../../server/_core/context.js";
 
 export const config = {
   runtime: "nodejs",
@@ -57,9 +58,9 @@ export default async function handler(req: VercelLikeRequest, res: VercelLikeRes
     endpoint: "/api/trpc",
     req: request,
     router: appRouter,
-    createContext: async () => ({
-      req,
-      res,
+    createContext: async (): Promise<TrpcContext> => ({
+      req: req as TrpcContext["req"],
+      res: res as TrpcContext["res"],
       user: await resolveUserFromAuthHeader(req.headers.authorization),
     }),
     onError({ error, path }: { error: unknown; path: string | undefined }) {

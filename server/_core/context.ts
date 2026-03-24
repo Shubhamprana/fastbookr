@@ -1,5 +1,5 @@
 import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
-import { getUserFromAccessToken, type AppUser } from "../db";
+import { getUserFromAccessToken, type AppUser } from "../db.js";
 
 export type TrpcContext = {
   req: ExpressRequest;
