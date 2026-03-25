@@ -780,7 +780,7 @@ export default function Admin() {
                     <Input
                       value={platformForm.teamName}
                       onChange={(e) => setPlatformForm((current) => ({ ...current, teamName: e.target.value }))}
-                      placeholder="RealEstate Pro Match Team"
+                      placeholder="Fastbookr Team"
                       className="mt-1"
                     />
                   </div>
@@ -809,7 +809,7 @@ export default function Admin() {
                         type="email"
                         value={platformForm.contactEmail}
                         onChange={(e) => setPlatformForm((current) => ({ ...current, contactEmail: e.target.value }))}
-                        placeholder="agent@realestatepro.com"
+                        placeholder="team@fastbookr.com"
                         className="mt-1"
                       />
                     </div>

@@ -57,7 +57,7 @@ export default function About() {
                 We Help You Find the <span className="text-primary">Right Rental Match</span>
               </h2>
               <p className="text-muted-foreground leading-relaxed mb-5">
-                RealEstate Pro is a property platform built to connect renters with verified listings and help owners receive better quality inquiries.
+                Fastbookr is a property platform built to connect renters with verified listings and help owners receive better quality inquiries.
                 We focus on making rental discovery simpler, faster, and more reliable for Indian cities.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-8">

@@ -18,7 +18,7 @@ const FAQ_CATEGORIES = [
   {
     title: "Listing as an Owner",
     items: [
-      { q: "How can I list my room or property with RealEstate Pro?", a: "You can submit your property through the listing form with photos, rent details, and location. Our team reviews the listing before publishing it." },
+      { q: "How can I list my room or property with Fastbookr?", a: "You can submit your property through the listing form with photos, rent details, and location. Our team reviews the listing before publishing it." },
       { q: "Can I list only full apartments, or rooms as well?", a: "You can list rooms, shared rooms, studios, PG/hostel spaces, apartments, houses, and independent floors." },
       { q: "When does my listing go live?", a: "Listings go live after admin review. This helps us reduce spam, incomplete submissions, and misleading property details." },
     ],

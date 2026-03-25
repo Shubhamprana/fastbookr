@@ -71,7 +71,7 @@ const HOW_IT_WORKS = [
 ];
 
 const TESTIMONIALS = [
-  { name: "Aman Verma", role: "Tenant", text: "RealEstate Pro helped me find a rental within my budget without wasting time on fake or outdated listings. The team was quick and practical.", rating: 5 },
+  { name: "Aman Verma", role: "Tenant", text: "Fastbookr helped me find a rental within my budget without wasting time on fake or outdated listings. The team was quick and practical.", rating: 5 },
   { name: "Neha Arora", role: "Property Owner", text: "I listed my flat and started getting qualified tenant leads instead of random calls. That made the platform useful from day one.", rating: 5 },
   { name: "Priya Sharma", role: "First-time Renter", text: "As a first-time renter, I was nervous about the process. The team guided me at every step and helped me shortlist the right apartment quickly.", rating: 5 },
 ];
@@ -435,7 +435,7 @@ export default function Home() {
             <div>
               <span className="text-primary font-semibold text-sm uppercase tracking-wider">About Us</span>
               <h2 className="text-3xl md:text-4xl font-bold text-foreground mt-2 mb-5">
-                Welcome to <span className="text-primary">RealEstate Pro</span>
+                Welcome to <span className="text-primary">Fastbookr</span>
               </h2>
               <p className="text-muted-foreground leading-relaxed mb-6">
                 We are a property platform focused on helping renters discover verified spaces and helping owners receive qualified tenant leads.
@@ -484,7 +484,7 @@ export default function Home() {
                 Satisfied <span className="text-primary">Clients</span>
               </h2>
               <p className="text-muted-foreground mb-8">
-                Hear what our clients have to say about their experience with RealEstate Pro
+                Hear what our clients have to say about their experience with Fastbookr
               </p>
             </div>
             <div>
@@ -567,7 +567,7 @@ export default function Home() {
         <div className="container">
           <div className="text-center mb-10">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
-              News from <span className="text-primary">RealEstate Pro</span>
+              News from <span className="text-primary">Fastbookr</span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
               Stay updated with the latest real estate news and insights

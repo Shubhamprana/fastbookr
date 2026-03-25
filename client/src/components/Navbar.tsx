@@ -43,7 +43,7 @@ export default function Navbar() {
                 </svg>
               </div>
               <span className="text-xl font-bold tracking-tight">
-                <span className="text-primary">REAL</span>ESTATE
+                <span className="text-primary">FAST</span>BOOKR
               </span>
             </div>
           </Link>

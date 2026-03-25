@@ -56,7 +56,7 @@ export default function Contact() {
             {[
               { icon: MapPin, title: "Our Office", line1: "Sector 17 Business Hub", line2: "Chandigarh, India" },
               { icon: Phone, title: "Phone", line1: platformSettings?.contactPhone || "+91 98765 43210", line2: "Mon - Sat support" },
-              { icon: Mail, title: "Email", line1: platformSettings?.contactEmail || "agent@realestatepro.com", line2: "We reply to qualified requests" },
+              { icon: Mail, title: "Email", line1: platformSettings?.contactEmail || "team@fastbookr.com", line2: "We reply to qualified requests" },
               { icon: Clock, title: "Working Hours", line1: "Mon - Fri: 9AM - 6PM", line2: "Sat: 10AM - 4PM" },
             ].map((item, i) => (
               <Card key={i} className="group text-center p-6 border border-gray-100 hover:shadow-lg hover:border-primary/30 transition-all duration-300">

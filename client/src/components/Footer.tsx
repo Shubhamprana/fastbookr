@@ -32,7 +32,7 @@ export default function Footer() {
                 </svg>
               </div>
               <span className="text-xl font-bold">
-                <span className="text-primary">REAL</span>ESTATE
+                <span className="text-primary">FAST</span>BOOKR
               </span>
             </div>
             <p className="text-gray-400 text-sm leading-relaxed mb-6">
@@ -90,7 +90,7 @@ export default function Footer() {
               </li>
               <li className="flex items-center gap-3">
                 <Mail className="w-5 h-5 text-primary shrink-0" />
-                <span className="text-gray-400 text-sm">{platformSettings?.contactEmail || "agent@realestatepro.com"}</span>
+                <span className="text-gray-400 text-sm">{platformSettings?.contactEmail || "team@fastbookr.com"}</span>
               </li>
             </ul>
           </div>
@@ -122,7 +122,7 @@ export default function Footer() {
         <div className="container py-5">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-gray-500 text-sm">
-              &copy; {new Date().getFullYear()} RealEstate Pro. All rights reserved.
+              &copy; {new Date().getFullYear()} Fastbookr. All rights reserved.
             </p>
             <div className="flex gap-6">
               <a href="#" className="text-gray-500 hover:text-gray-300 text-sm" onClick={(e) => e.preventDefault()}>

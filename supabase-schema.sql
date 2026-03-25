@@ -61,10 +61,10 @@ create table if not exists public.owner_messages (
 
 create table if not exists public.platform_settings (
   id integer primary key,
-  team_name text not null default 'RealEstate Pro Match Team',
+  team_name text not null default 'Fastbookr Team',
   tagline text not null default 'We qualify tenants before connecting them to owners.',
   contact_phone text not null default '+91 98765 43210',
-  contact_email text not null default 'agent@realestatepro.com',
+  contact_email text not null default 'team@fastbookr.com',
   updated_at timestamptz not null default now()
 );
 
@@ -163,5 +163,5 @@ values ('property-images', 'property-images', true)
 on conflict (id) do nothing;
 
 insert into public.platform_settings (id, team_name, tagline, contact_phone, contact_email)
-values (1, 'RealEstate Pro Match Team', 'We qualify tenants before connecting them to owners.', '+91 98765 43210', 'agent@realestatepro.com')
+values (1, 'Fastbookr Team', 'We qualify tenants before connecting them to owners.', '+91 98765 43210', 'team@fastbookr.com')
 on conflict (id) do nothing;

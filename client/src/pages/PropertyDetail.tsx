@@ -152,6 +152,15 @@ export default function PropertyDetail() {
   };
   
   const images = parseImages(property.images as string);
+  const hasOwnerContact = Boolean(property.ownerName || property.ownerPhone || property.ownerEmail);
+  const ownerDisplayName = property.ownerName || "Property Owner";
+  const ownerInitials = ownerDisplayName
+    .split(" ")
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "OW";
 
   const nextImage = () => setCurrentImageIndex((prev) => (prev + 1) % images.length);
   const prevImage = () => setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
@@ -301,6 +310,7 @@ export default function PropertyDetail() {
                       { icon: Building2, label: "Listing Type", value: property.listingType === "sale" ? "For Sale" : property.listingType === "rent" ? "For Rent" : "Co-Living" },
                       { icon: MapPin, label: "City", value: property.city },
                       { icon: MapPin, label: "State", value: property.state },
+                      ...(property.ownerName ? [{ icon: Building2, label: "Listed By", value: property.ownerName }] : []),
                       { icon: BedDouble, label: "Bedrooms", value: property.bedrooms },
                       { icon: Bath, label: "Bathrooms", value: property.bathrooms },
                       { icon: Maximize, label: "Square Feet", value: property.squareFeet.toLocaleString() },
@@ -401,24 +411,69 @@ export default function PropertyDetail() {
 
             {/* Sidebar */}
             <div className="lg:col-span-1">
-              {/* Agent Card */}
+              {/* Contact Card */}
               <Card className="mb-6 border border-gray-100 shadow-sm">
                 <CardContent className="p-6 text-center">
                   <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                    <span className="text-2xl font-bold text-primary">RE</span>
+                    <span className="text-2xl font-bold text-primary">
+                      {hasOwnerContact ? ownerInitials : "FB"}
+                    </span>
                   </div>
-                  <h3 className="text-lg font-bold text-foreground">{platformSettings?.teamName || "RealEstate Pro Match Team"}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">{platformSettings?.tagline || "We qualify tenants before connecting them to owners."}</p>
+                  <h3 className="text-lg font-bold text-foreground">
+                    {hasOwnerContact ? ownerDisplayName : platformSettings?.teamName || "Fastbookr Team"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {hasOwnerContact
+                      ? "Contact the owner directly using the details below."
+                      : platformSettings?.tagline || "We qualify tenants before connecting them to owners."}
+                  </p>
                   <div className="space-y-2 text-sm">
-                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                      <Phone className="w-4 h-4 text-primary" />
-                      <span>{platformSettings?.contactPhone || "+91 98765 43210"}</span>
-                    </div>
-                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                      <Mail className="w-4 h-4 text-primary" />
-                      <span>{platformSettings?.contactEmail || "agent@realestatepro.com"}</span>
-                    </div>
+                    {hasOwnerContact && property.ownerPhone && (
+                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                        <Phone className="w-4 h-4 text-primary" />
+                        <a href={`tel:${property.ownerPhone}`} className="hover:text-primary transition-colors">
+                          {property.ownerPhone}
+                        </a>
+                      </div>
+                    )}
+                    {hasOwnerContact && property.ownerEmail && (
+                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                        <Mail className="w-4 h-4 text-primary" />
+                        <a href={`mailto:${property.ownerEmail}`} className="hover:text-primary transition-colors break-all">
+                          {property.ownerEmail}
+                        </a>
+                      </div>
+                    )}
+                    {!hasOwnerContact && (
+                      <>
+                        <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                          <Phone className="w-4 h-4 text-primary" />
+                          <span>{platformSettings?.contactPhone || "+91 98765 43210"}</span>
+                        </div>
+                        <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                          <Mail className="w-4 h-4 text-primary" />
+                          <span>{platformSettings?.contactEmail || "team@fastbookr.com"}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
+                  {hasOwnerContact && (
+                    <div className="mt-5 pt-4 border-t border-gray-100 text-left">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                        Fastbookr Support
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Phone className="w-4 h-4 text-primary" />
+                          <span>{platformSettings?.contactPhone || "+91 98765 43210"}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Mail className="w-4 h-4 text-primary" />
+                          <span className="break-all">{platformSettings?.contactEmail || "team@fastbookr.com"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -426,7 +481,11 @@ export default function PropertyDetail() {
               <Card className="sticky top-24 border border-gray-100 shadow-sm">
                 <CardContent className="p-6">
                   <h3 className="text-lg font-bold text-foreground mb-1">Interested in this property?</h3>
-                  <p className="text-sm text-muted-foreground mb-5">Fill out the form below. We will review your request and connect you with the owner once your inquiry is qualified.</p>
+                  <p className="text-sm text-muted-foreground mb-5">
+                    {hasOwnerContact
+                      ? "You can contact the owner directly using the details above, or send an inquiry through Fastbookr if you want us to assist."
+                      : "Fill out the form below. We will review your request and connect you with the owner once your inquiry is qualified."}
+                  </p>
                   <form onSubmit={handleSubmitInquiry} className="space-y-4">
                     <div>
                       <Label htmlFor="name" className="text-sm font-medium">Full Name *</Label>

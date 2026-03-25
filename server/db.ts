@@ -637,10 +637,10 @@ export async function getPlatformSettings() {
   if (!data) {
     return {
       id: 1,
-      teamName: "RealEstate Pro Match Team",
+      teamName: "Fastbookr Team",
       tagline: "We qualify tenants before connecting them to owners.",
       contactPhone: "+1 (555) 123-4567",
-      contactEmail: "agent@realestatepro.com",
+      contactEmail: "team@fastbookr.com",
     } satisfies PlatformSettingsRecord;
   }
 
