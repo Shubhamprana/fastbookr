@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { supabase } from "@/lib/supabase";
+import { account } from "@/lib/appwrite";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
@@ -43,12 +43,15 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       async fetch(input, init) {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
         const headers = new Headers(init?.headers);
-        if (session?.access_token) {
-          headers.set("Authorization", `Bearer ${session.access_token}`);
+
+        try {
+          const { jwt } = await account.createJWT();
+          if (jwt) {
+            headers.set("Authorization", `Bearer ${jwt}`);
+          }
+        } catch {
+          // Public requests can continue without an authenticated Appwrite session.
         }
 
         return globalThis.fetch(input, {

@@ -4,6 +4,9 @@ import { Upload, X, Loader2, Image as ImageIcon } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
+const MAX_IMAGE_COUNT = 4;
+const MAX_IMAGE_SIZE_MB = 10;
+
 interface ImageUploaderProps {
   images: string[];
   onImagesChange: (images: string[]) => void;
@@ -12,20 +15,49 @@ interface ImageUploaderProps {
 export function ImageUploader({ images, onImagesChange }: ImageUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState<number>(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadImage = trpc.upload.image.useMutation();
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
+    setUploadError(null);
     const fileArray = Array.from(files).filter(f => f.type.startsWith("image/"));
     if (fileArray.length === 0) {
-      toast.error("Please select image files only");
+      const message = "Please select image files only";
+      setUploadError(message);
+      toast.error(message);
       return;
     }
 
-    setUploading(prev => prev + fileArray.length);
+    const availableSlots = Math.max(MAX_IMAGE_COUNT - images.length, 0);
+
+    if (availableSlots === 0) {
+      const message = `You can upload up to ${MAX_IMAGE_COUNT} images per property.`;
+      setUploadError(message);
+      toast.error(message);
+      return;
+    }
+
+    if (fileArray.length > availableSlots) {
+      const message = `Only ${availableSlots} image slot${availableSlots > 1 ? "s" : ""} left for this property.`;
+      setUploadError(message);
+      toast.error(message);
+    }
+
+    const limitedFiles = fileArray.slice(0, availableSlots);
+
+    setUploading(prev => prev + limitedFiles.length);
     const nextImages = [...images];
 
-    for (const file of fileArray) {
+    for (const file of limitedFiles) {
+      if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+        const message = `${file.name} is larger than ${MAX_IMAGE_SIZE_MB}MB.`;
+        setUploadError(message);
+        toast.error(message);
+        setUploading(prev => prev - 1);
+        continue;
+      }
+
       try {
         // Convert to base64
         const reader = new FileReader();
@@ -50,7 +82,9 @@ export function ImageUploader({ images, onImagesChange }: ImageUploaderProps) {
         onImagesChange([...nextImages]);
         toast.success(`Uploaded ${file.name}`);
       } catch (error: any) {
-        toast.error(`Failed to upload ${file.name}: ${error.message}`);
+        const message = `Failed to upload ${file.name}: ${error.message}`;
+        setUploadError(message);
+        toast.error(message);
       } finally {
         setUploading(prev => prev - 1);
       }
@@ -122,7 +156,7 @@ export function ImageUploader({ images, onImagesChange }: ImageUploaderProps) {
               Drag & drop images here, or click to browse
             </p>
             <p className="text-xs text-muted-foreground">
-              Supports JPG, PNG, WebP (max 10MB each)
+              Upload up to {MAX_IMAGE_COUNT} images. Supports JPG, PNG, WebP up to {MAX_IMAGE_SIZE_MB}MB each.
             </p>
           </div>
         )}
@@ -165,7 +199,13 @@ export function ImageUploader({ images, onImagesChange }: ImageUploaderProps) {
       {images.length === 0 && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <ImageIcon className="h-4 w-4" />
-          <span>No images uploaded yet. The first image will be the cover photo.</span>
+          <span>No images uploaded yet. You can add up to {MAX_IMAGE_COUNT} images and the first one will be the cover photo.</span>
+        </div>
+      )}
+
+      {uploadError && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {uploadError}
         </div>
       )}
     </div>

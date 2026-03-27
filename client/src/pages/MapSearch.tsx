@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { MapPin, Bed, Bath, Maximize, X, Search, Navigation, List, Map as MapIcon } from "lucide-react";
 import { Link } from "wouter";
 import { PlacesAutocomplete } from "@/components/PlacesAutocomplete";
+import { getPropertyStats } from "@/lib/propertyDisplay";
 
 interface GeocodedProperty {
   property: any;
@@ -36,6 +37,18 @@ export default function MapSearch() {
       minimumFractionDigits: 0,
     });
   };
+
+  const parseImages = (images: string) => {
+    try {
+      const parsed = JSON.parse(images);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      return images ? images.split(",").map(url => url.trim()).filter(Boolean) : [];
+    }
+  };
+
+  const getMainImage = (images: string) =>
+    parseImages(images)[0] || "https://placehold.co/600x400/e2e8f0/94a3b8?text=Property";
 
   // Calculate distance between two points in km
   const getDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
@@ -239,6 +252,9 @@ export default function MapSearch() {
               </div>
               <div className="divide-y">
                 {(searchCenter ? nearbyProperties : properties || []).map((property: any) => (
+                  (() => {
+                    const stats = getPropertyStats(property);
+                    return (
                   <div
                     key={property.id}
                     className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
@@ -248,7 +264,7 @@ export default function MapSearch() {
                   >
                     <div className="flex gap-3">
                       <img
-                        src={property.images?.split(",")[0]}
+                        src={getMainImage(property.images)}
                         alt={property.title}
                         className="w-24 h-20 object-cover rounded-lg shrink-0"
                       />
@@ -261,16 +277,19 @@ export default function MapSearch() {
                         <p className="text-primary font-bold text-sm mt-1">
                           {formatPrice(property.price)}
                         </p>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                          <span className="flex items-center gap-1">
-                            <Bed className="w-3 h-3" /> {property.bedrooms}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Bath className="w-3 h-3" /> {property.bathrooms}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Maximize className="w-3 h-3" /> {property.squareFeet}
-                          </span>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
+                          {stats.map((item) => (
+                            <span key={item.key} className="flex items-center gap-1">
+                              {item.key === "bedrooms" ? (
+                                <Bed className="w-3 h-3" />
+                              ) : item.key === "bathrooms" ? (
+                                <Bath className="w-3 h-3" />
+                              ) : (
+                                <Maximize className="w-3 h-3" />
+                              )}{" "}
+                              {item.value} {item.shortLabel}
+                            </span>
+                          ))}
                         </div>
                         {property.distance !== undefined && (
                           <p className="text-xs text-primary font-medium mt-1">
@@ -281,6 +300,8 @@ export default function MapSearch() {
                       </div>
                     </div>
                   </div>
+                    );
+                  })()
                 ))}
                 {searchCenter && nearbyProperties.length === 0 && (
                   <div className="p-8 text-center text-muted-foreground">
@@ -380,6 +401,9 @@ export default function MapSearch() {
 
             {/* Selected Property Card */}
             {selectedProperty && !showListView && (
+              (() => {
+                const stats = getPropertyStats(selectedProperty);
+                return (
               <Card className="absolute bottom-20 left-4 w-96 shadow-2xl z-10">
                 <div className="relative">
                   <button
@@ -391,7 +415,7 @@ export default function MapSearch() {
 
                   <div className="relative h-40 overflow-hidden rounded-t-lg">
                     <img
-                      src={selectedProperty.images?.split(",")[0]}
+                      src={getMainImage(selectedProperty.images)}
                       alt={selectedProperty.title}
                       className="w-full h-full object-cover"
                     />
@@ -413,16 +437,19 @@ export default function MapSearch() {
                     <div className="text-xl font-bold text-primary mb-3">
                       {formatPrice(selectedProperty.price)}
                     </div>
-                    <div className="flex items-center gap-4 mb-3 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Bed className="w-4 h-4" /> {selectedProperty.bedrooms} Beds
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Bath className="w-4 h-4" /> {selectedProperty.bathrooms} Baths
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Maximize className="w-4 h-4" /> {selectedProperty.squareFeet} sqft
-                      </span>
+                    <div className="flex items-center gap-4 mb-3 text-sm text-muted-foreground flex-wrap">
+                      {stats.map((item) => (
+                        <span key={item.key} className="flex items-center gap-1">
+                          {item.key === "bedrooms" ? (
+                            <Bed className="w-4 h-4" />
+                          ) : item.key === "bathrooms" ? (
+                            <Bath className="w-4 h-4" />
+                          ) : (
+                            <Maximize className="w-4 h-4" />
+                          )}{" "}
+                          {item.value} {item.shortLabel}
+                        </span>
+                      ))}
                     </div>
                     <Link href={`/properties/${selectedProperty.id}`}>
                       <Button className="w-full">View Full Details</Button>
@@ -430,6 +457,8 @@ export default function MapSearch() {
                   </div>
                 </div>
               </Card>
+                );
+              })()
             )}
 
             {/* Info Box */}

@@ -6,8 +6,21 @@ import Footer from "@/components/Footer";
 import { PropertyForm } from "@/components/PropertyForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { formatAppErrorMessage } from "@/lib/errors";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import {
+  asAvailableFor,
+  asBalcony,
+  asFurnishing,
+  asGenderPreference,
+  asListingType,
+  asParking,
+  asPlotFacing,
+  asPropertyType,
+  normalizeBathroomValue,
+  normalizeBedroomValue,
+} from "@/lib/propertyDisplay";
 
 const emptyForm = {
   title: "",
@@ -23,6 +36,16 @@ const emptyForm = {
   bathrooms: "",
   squareFeet: "",
   images: "[]",
+  videoUrl: "",
+  furnishing: "",
+  parking: "",
+  balcony: "",
+  availableFor: "",
+  genderPreference: "",
+  foodIncluded: "",
+  attachedBathroom: "",
+  plotFacing: "",
+  rejectionReason: "",
   featured: "0",
   approvalStatus: "pending",
   feeStatus: "open",
@@ -50,7 +73,7 @@ export default function SubmitListing() {
       setLocation("/");
     },
     onError: error => {
-      toast.error(error.message);
+      toast.error(formatAppErrorMessage(error, "Failed to submit listing."));
     },
   });
 
@@ -68,6 +91,8 @@ export default function SubmitListing() {
 
     try {
       const images = JSON.parse(prefilled.images);
+      const propertyType = asPropertyType(prefilled.propertyType);
+      const listingType = asListingType(prefilled.listingType);
       submitListing.mutate({
         title: prefilled.title,
         description: prefilled.description,
@@ -76,12 +101,22 @@ export default function SubmitListing() {
         city: prefilled.city,
         state: prefilled.state,
         zipCode: prefilled.zipCode || null,
-        propertyType: prefilled.propertyType,
-        listingType: prefilled.listingType,
-        bedrooms: parseInt(prefilled.bedrooms, 10),
-        bathrooms: parseInt(prefilled.bathrooms, 10),
+        propertyType,
+        listingType,
+        bedrooms: Number(normalizeBedroomValue(propertyType, parseInt(prefilled.bedrooms || "0", 10))),
+        bathrooms: Number(normalizeBathroomValue(propertyType, parseInt(prefilled.bathrooms || "0", 10))),
         squareFeet: parseInt(prefilled.squareFeet, 10),
         images,
+        videoUrl: prefilled.videoUrl || null,
+        furnishing: asFurnishing(prefilled.furnishing),
+        parking: asParking(prefilled.parking),
+        balcony: asBalcony(prefilled.balcony),
+        availableFor: asAvailableFor(prefilled.availableFor),
+        genderPreference: asGenderPreference(prefilled.genderPreference),
+        foodIncluded: prefilled.foodIncluded ? prefilled.foodIncluded === "true" : null,
+        attachedBathroom: prefilled.attachedBathroom ? prefilled.attachedBathroom === "true" : null,
+        plotFacing: asPlotFacing(prefilled.plotFacing),
+        rejectionReason: null,
         featured: false,
         approvalStatus: "pending",
         feeStatus: "open",

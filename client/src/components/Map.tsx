@@ -79,39 +79,12 @@
 import { useEffect, useRef, useState } from "react";
 import { usePersistFn } from "@/hooks/usePersistFn";
 import { cn } from "@/lib/utils";
+import { loadGoogleMapsScript } from "@/lib/googleMaps";
 
 declare global {
   interface Window {
     google?: typeof google;
   }
-}
-
-const API_KEY = import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
-const FORGE_BASE_URL =
-  import.meta.env.VITE_FRONTEND_FORGE_API_URL ||
-  "https://forge.butterfly-effect.dev";
-const MAPS_PROXY_URL = `${FORGE_BASE_URL}/v1/maps/proxy`;
-
-function loadMapScript() {
-  return new Promise((resolve, reject) => {
-    if (!API_KEY) {
-      reject(new Error("Map API key is missing"));
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = `${MAPS_PROXY_URL}/maps/api/js?key=${API_KEY}&v=weekly&libraries=marker,places,geocoding,geometry`;
-    script.async = true;
-    script.crossOrigin = "anonymous";
-    script.onload = () => {
-      resolve(null);
-      script.remove(); // Clean up immediately
-    };
-    script.onerror = () => {
-      reject(new Error("Failed to load Google Maps script"));
-    };
-    document.head.appendChild(script);
-  });
 }
 
 interface MapViewProps {
@@ -133,7 +106,7 @@ export function MapView({
 
   const init = usePersistFn(async () => {
     try {
-      await loadMapScript();
+      await loadGoogleMapsScript();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to initialize map";

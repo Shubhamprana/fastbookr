@@ -10,8 +10,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/lib/supabase";
-import { Home, LockKeyhole, Mail } from "lucide-react";
+import { account, ID, OAuthProvider } from "@/lib/appwrite";
+import { Eye, EyeOff, Home, LockKeyhole, Mail } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
@@ -20,6 +20,7 @@ export default function Auth() {
   const { isAuthenticated, refresh } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -37,28 +38,20 @@ export default function Auth() {
 
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        await account.create({
+          userId: ID.unique(),
           email: form.email,
           password: form.password,
-          options: {
-            data: {
-              name: form.name,
-              full_name: form.name,
-            },
-          },
+          name: form.name,
         });
 
-        if (error) throw error;
-
-        toast.success("Account created. If email confirmation is enabled, verify your email before signing in.");
+        toast.success("Account created. Sign in with your new credentials.");
         setMode("signin");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        await account.createEmailPasswordSession({
           email: form.email,
           password: form.password,
         });
-
-        if (error) throw error;
 
         await refresh();
         window.location.href = "/";
@@ -75,14 +68,11 @@ export default function Auth() {
   const signInWithGoogle = async () => {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth`,
-        },
+      account.createOAuth2Session({
+        provider: OAuthProvider.Google,
+        success: `${window.location.origin}/auth`,
+        failure: `${window.location.origin}/auth`,
       });
-
-      if (error) throw error;
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Google sign-in failed";
@@ -180,14 +170,22 @@ export default function Auth() {
                     <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                     <Input
                       id="password"
-                      type="password"
-                      className="pl-9"
+                      type={showPassword ? "text" : "password"}
+                      className="pl-9 pr-11"
                       value={form.password}
                       onChange={e => setForm(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Minimum 6 characters"
-                      minLength={6}
+                      placeholder="Minimum 8 characters"
+                      minLength={8}
                       required
                     />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 transition hover:text-stone-800"
+                      onClick={() => setShowPassword(current => !current)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
                 </div>
 

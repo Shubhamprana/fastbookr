@@ -1,14 +1,48 @@
-import { createClient } from "@supabase/supabase-js";
+import {
+  Account,
+  Client,
+  Databases,
+  ID,
+  Models,
+  Permission,
+  Query,
+  Role,
+  Storage,
+} from "node-appwrite";
+import { InputFile } from "node-appwrite/file";
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL ?? "";
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
-const storageBucket = process.env.SUPABASE_STORAGE_BUCKET ?? "property-images";
+const appwriteEndpoint =
+  process.env.APPWRITE_ENDPOINT ?? process.env.VITE_APPWRITE_ENDPOINT ?? "";
+const appwriteProjectId =
+  process.env.APPWRITE_PROJECT_ID ?? process.env.VITE_APPWRITE_PROJECT_ID ?? "";
+const appwriteApiKey = process.env.APPWRITE_API_KEY ?? "";
+const appwriteDatabaseId = process.env.APPWRITE_DATABASE_ID ?? "";
+const storageBucket = process.env.APPWRITE_BUCKET_ID ?? "property-images";
+const collectionIds = {
+  users: process.env.APPWRITE_USERS_COLLECTION_ID ?? "",
+  properties: process.env.APPWRITE_PROPERTIES_COLLECTION_ID ?? "",
+  inquiries: process.env.APPWRITE_INQUIRIES_COLLECTION_ID ?? "",
+  ownerMessages: process.env.APPWRITE_OWNER_MESSAGES_COLLECTION_ID ?? "",
+  platformSettings: process.env.APPWRITE_PLATFORM_SETTINGS_COLLECTION_ID ?? "",
+  contactMessages: process.env.APPWRITE_CONTACT_MESSAGES_COLLECTION_ID ?? "",
+};
+const collectionEnvNames = {
+  users: "APPWRITE_USERS_COLLECTION_ID",
+  properties: "APPWRITE_PROPERTIES_COLLECTION_ID",
+  inquiries: "APPWRITE_INQUIRIES_COLLECTION_ID",
+  ownerMessages: "APPWRITE_OWNER_MESSAGES_COLLECTION_ID",
+  platformSettings: "APPWRITE_PLATFORM_SETTINGS_COLLECTION_ID",
+  contactMessages: "APPWRITE_CONTACT_MESSAGES_COLLECTION_ID",
+} as const;
 const adminEmails = new Set(
-  (process.env.SUPABASE_ADMIN_EMAILS ?? "")
+  (process.env.APPWRITE_ADMIN_EMAILS ?? "")
     .split(",")
     .map(value => value.trim().toLowerCase())
     .filter(Boolean)
 );
+
+const MAX_LIST_LIMIT = 5000;
+const PLATFORM_SETTINGS_DOC_ID = "platform-settings";
 
 export type AppUser = {
   id: string;
@@ -37,6 +71,16 @@ export type PropertyRecord = {
   bathrooms: number;
   squareFeet: number;
   images: string;
+  videoUrl: string | null;
+  furnishing: string | null;
+  parking: string | null;
+  balcony: string | null;
+  availableFor: string | null;
+  genderPreference: string | null;
+  foodIncluded: boolean | null;
+  attachedBathroom: boolean | null;
+  plotFacing: string | null;
+  rejectionReason: string | null;
   featured: boolean;
   status: string;
   approvalStatus: "pending" | "approved" | "rejected";
@@ -109,6 +153,71 @@ type LegacyInsertUser = {
   lastSignedIn?: Date;
 };
 
+type UserDocument = Models.Document & {
+  email?: string | null;
+  name?: string | null;
+  loginMethod?: string | null;
+  role?: "user" | "admin";
+  lastSignedIn?: string;
+};
+
+type PropertyDocument = Models.Document & {
+  id: number;
+  title: string;
+  description: string;
+  price: number;
+  location: string;
+  city: string;
+  state: string;
+  zipCode?: string | null;
+  propertyType: string;
+  listingType: string;
+  bedrooms: number;
+  bathrooms: number;
+  squareFeet: number;
+  images: string;
+  featured: boolean;
+  status: string;
+  approvalStatus: "pending" | "approved" | "rejected";
+  createdBy: string;
+  extra?: string | null;
+};
+
+type InquiryDocument = Models.Document & {
+  id: number;
+  propertyId: number;
+  name: string;
+  email: string;
+  phone?: string | null;
+  message: string;
+  status: string;
+};
+
+type OwnerMessageDocument = Models.Document & {
+  id: number;
+  propertyId: number;
+  senderRole: "admin" | "owner";
+  content: string;
+};
+
+type PlatformSettingsDocument = Models.Document & {
+  id: number;
+  teamName: string;
+  tagline: string;
+  contactPhone: string;
+  contactEmail: string;
+};
+
+type ContactMessageDocument = Models.Document & {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string | null;
+  subject?: string | null;
+  message: string;
+  status: "new" | "reviewed" | "closed";
+};
+
 function assertEnv(value: string, name: string) {
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
@@ -116,121 +225,43 @@ function assertEnv(value: string, name: string) {
   return value;
 }
 
-function getSupabaseAdmin() {
-  return createClient(
-    assertEnv(supabaseUrl, "VITE_SUPABASE_URL"),
-    assertEnv(supabaseServiceRoleKey, "SUPABASE_SERVICE_ROLE_KEY"),
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    }
+function optionalCollectionId(name: keyof typeof collectionIds) {
+  return collectionIds[name];
+}
+
+function requireCollectionId(name: keyof typeof collectionIds) {
+  return assertEnv(collectionIds[name], collectionEnvNames[name]);
+}
+
+function getAppwriteAdminClient() {
+  return new Client()
+    .setEndpoint(assertEnv(appwriteEndpoint, "APPWRITE_ENDPOINT"))
+    .setProject(assertEnv(appwriteProjectId, "APPWRITE_PROJECT_ID"))
+    .setKey(assertEnv(appwriteApiKey, "APPWRITE_API_KEY"));
+}
+
+function getAppwriteUserClient(jwt: string) {
+  return new Client()
+    .setEndpoint(assertEnv(appwriteEndpoint, "APPWRITE_ENDPOINT"))
+    .setProject(assertEnv(appwriteProjectId, "APPWRITE_PROJECT_ID"))
+    .setJWT(jwt);
+}
+
+function getDatabases() {
+  return new Databases(getAppwriteAdminClient());
+}
+
+function getPublicFileUrl(fileId: string) {
+  const endpoint = assertEnv(appwriteEndpoint, "APPWRITE_ENDPOINT").replace(/\/+$/, "");
+  const projectId = assertEnv(appwriteProjectId, "APPWRITE_PROJECT_ID");
+  const bucketId = assertEnv(storageBucket, "APPWRITE_BUCKET_ID");
+  const url = new URL(
+    `${endpoint}/storage/buckets/${encodeURIComponent(bucketId)}/files/${encodeURIComponent(
+      fileId
+    )}/view`
   );
-}
-
-function mapUser(row: Record<string, any>): AppUser {
-  return {
-    id: row.id,
-    openId: row.id,
-    email: row.email ?? null,
-    name: row.name ?? null,
-    role: row.role === "admin" ? "admin" : "user",
-    loginMethod: row.login_method ?? null,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    lastSignedIn: row.last_signed_in,
-  };
-}
-
-function mapProperty(row: Record<string, any>): PropertyRecord {
-  let normalizedImages =
-    typeof row.images === "string" ? row.images : JSON.stringify(row.images ?? []);
-
-  try {
-    const parsed = JSON.parse(normalizedImages);
-    if (typeof parsed === "string") {
-      normalizedImages = parsed;
-    }
-  } catch {
-    // Keep original string when it is already a plain URL or JSON array string.
-  }
-
-  return {
-    id: Number(row.id),
-    title: row.title,
-    description: row.description,
-    price: Number(row.price),
-    location: row.location,
-    city: row.city,
-    state: row.state,
-    zipCode: row.zip_code ?? null,
-    propertyType: row.property_type,
-    listingType: row.listing_type,
-    bedrooms: Number(row.bedrooms),
-    bathrooms: Number(row.bathrooms),
-    squareFeet: Number(row.square_feet),
-    images: normalizedImages,
-    featured: Boolean(row.featured),
-    status: row.status,
-    approvalStatus: row.approval_status ?? "pending",
-    feeStatus: row.fee_status ?? "open",
-    createdBy: row.created_by,
-    ownerName: row.owner_name ?? null,
-    ownerEmail: row.owner_email ?? null,
-    ownerPhone: row.owner_phone ?? null,
-    latitude: row.latitude === null || row.latitude === undefined ? null : Number(row.latitude),
-    longitude: row.longitude === null || row.longitude === undefined ? null : Number(row.longitude),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function mapInquiry(row: Record<string, any>): InquiryRecord {
-  return {
-    id: Number(row.id),
-    propertyId: Number(row.property_id),
-    name: row.name,
-    email: row.email,
-    phone: row.phone ?? null,
-    message: row.message,
-    status: row.status,
-    createdAt: row.created_at,
-  };
-}
-
-function mapOwnerMessage(row: Record<string, any>): OwnerMessageRecord {
-  return {
-    id: Number(row.id),
-    propertyId: Number(row.property_id),
-    senderRole: row.sender_role === "admin" ? "admin" : "owner",
-    content: row.content,
-    createdAt: row.created_at,
-  };
-}
-
-function mapPlatformSettings(row: Record<string, any>): PlatformSettingsRecord {
-  return {
-    id: Number(row.id),
-    teamName: row.team_name,
-    tagline: row.tagline,
-    contactPhone: row.contact_phone,
-    contactEmail: row.contact_email,
-    updatedAt: row.updated_at,
-  };
-}
-
-function mapContactMessage(row: Record<string, any>): ContactMessageRecord {
-  return {
-    id: Number(row.id),
-    name: row.name,
-    email: row.email,
-    phone: row.phone ?? null,
-    subject: row.subject ?? null,
-    message: row.message,
-    status: row.status === "reviewed" || row.status === "closed" ? row.status : "new",
-    createdAt: row.created_at,
-  };
+  url.searchParams.set("project", projectId);
+  return url.toString();
 }
 
 function normalizeImages(images: unknown): string {
@@ -240,248 +271,488 @@ function normalizeImages(images: unknown): string {
   return JSON.stringify(images ?? []);
 }
 
-function normalizePropertyPayload(property: Record<string, any>) {
+function parseImageUrls(images: unknown): string[] {
+  if (Array.isArray(images)) {
+    return images.filter((value): value is string => typeof value === "string" && value.length > 0);
+  }
+
+  if (typeof images !== "string" || !images.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(images);
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string" && value.length > 0)
+      : typeof parsed === "string"
+        ? [parsed]
+        : [];
+  } catch {
+    return images
+      .split(",")
+      .map(value => value.trim())
+      .filter(Boolean);
+  }
+}
+
+function toNullableBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (value === "true" || value === "1") return true;
+  if (value === "false" || value === "0") return false;
+  return null;
+}
+
+function sanitizeExtraPropertyDetails(property: Record<string, any>) {
+  const propertyType = property.propertyType;
+  const listingType = property.listingType;
+  const usesFurnishing = propertyType !== "land";
+  const usesParking = ["house", "apartment", "condo", "townhouse", "villa", "independent-floor"].includes(propertyType);
+  const usesBalcony = ["house", "apartment", "condo", "townhouse", "villa", "independent-floor", "studio"].includes(propertyType);
+  const usesAvailableFor = listingType === "rent" || listingType === "co-living";
+  const usesGenderPreference = ["room", "shared-room", "pg/hostel"].includes(propertyType);
+  const usesFoodIncluded = propertyType === "pg/hostel";
+  const usesAttachedBathroom = ["room", "shared-room", "studio", "pg/hostel"].includes(propertyType);
+  const usesPlotFacing = propertyType === "land";
+
   return {
-    title: property.title,
-    description: property.description,
-    price: property.price,
-    location: property.location,
-    city: property.city,
-    state: property.state,
-    zip_code: property.zipCode ?? null,
-    property_type: property.propertyType,
-    listing_type: property.listingType,
-    bedrooms: property.bedrooms,
-    bathrooms: property.bathrooms,
-    square_feet: property.squareFeet,
-    images: normalizeImages(property.images),
-    featured: Boolean(property.featured),
-    status: property.status ?? "available",
-    approval_status: property.approvalStatus ?? "pending",
-    fee_status: property.feeStatus ?? "open",
-    owner_name: property.ownerName ?? null,
-    owner_email: property.ownerEmail ?? null,
-    owner_phone: property.ownerPhone ?? null,
-    ...(property.createdBy ? { created_by: property.createdBy } : {}),
-    latitude: property.latitude ?? null,
-    longitude: property.longitude ?? null,
+    furnishing: usesFurnishing ? property.furnishing ?? null : null,
+    parking: usesParking ? property.parking ?? null : null,
+    balcony: usesBalcony ? property.balcony ?? null : null,
+    availableFor: usesAvailableFor ? property.availableFor ?? null : null,
+    genderPreference: usesGenderPreference ? property.genderPreference ?? null : null,
+    foodIncluded: usesFoodIncluded ? toNullableBoolean(property.foodIncluded) : null,
+    attachedBathroom: usesAttachedBathroom ? toNullableBoolean(property.attachedBathroom) : null,
+    plotFacing: usesPlotFacing ? property.plotFacing ?? null : null,
+    rejectionReason: property.approvalStatus === "rejected" ? property.rejectionReason ?? null : null,
   };
 }
 
-function inferLoginMethod(user: any): string | null {
-  const provider =
-    user.app_metadata?.provider ??
-    user.identities?.[0]?.provider ??
-    user.user_metadata?.provider;
+function getStorage() {
+  return new Storage(getAppwriteAdminClient());
+}
 
-  return typeof provider === "string" ? provider : null;
+function extractFileIdFromMediaUrl(url: string | null | undefined) {
+  if (!url) return null;
+  const match = url.match(/\/files\/([^/]+)\/view/i);
+  return match?.[1] ?? null;
+}
+
+async function cleanupMediaUrls(urls: string[]) {
+  const fileIds = Array.from(
+    new Set(
+      urls
+        .map(extractFileIdFromMediaUrl)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+
+  if (fileIds.length === 0) return;
+
+  const storage = getStorage();
+  for (const fileId of fileIds) {
+    try {
+      await storage.deleteFile({
+        bucketId: assertEnv(storageBucket, "APPWRITE_BUCKET_ID"),
+        fileId,
+      });
+    } catch (error) {
+      console.warn(`[Storage] Failed to delete unused media ${fileId}:`, error);
+    }
+  }
+}
+
+function buildNumericId() {
+  const suffix = Math.floor(Math.random() * 1000)
+    .toString()
+    .padStart(3, "0");
+  return Number(`${Date.now()}${suffix}`);
 }
 
 function isAdminEmail(email: string | null | undefined) {
   return Boolean(email && adminEmails.has(email.toLowerCase()));
 }
 
+function mapUser(doc: UserDocument): AppUser {
+  return {
+    id: doc.$id,
+    openId: doc.$id,
+    email: doc.email ?? null,
+    name: doc.name ?? null,
+    role: doc.role === "admin" ? "admin" : "user",
+    loginMethod: doc.loginMethod ?? null,
+    createdAt: doc.$createdAt,
+    updatedAt: doc.$updatedAt,
+    lastSignedIn: doc.lastSignedIn ?? doc.$updatedAt,
+  };
+}
+
+function mapProperty(doc: PropertyDocument): PropertyRecord {
+  let normalizedImages = doc.images;
+  let extra: Record<string, any> = {};
+
+  try {
+    const parsed = JSON.parse(normalizedImages);
+    if (typeof parsed === "string") {
+      normalizedImages = parsed;
+    }
+  } catch {
+    // Keep original string if it is already a URL or JSON array string.
+  }
+
+  try {
+    extra = typeof doc.extra === "string" ? JSON.parse(doc.extra) : {};
+  } catch {
+    extra = {};
+  }
+
+  return {
+    id: Number(doc.id),
+    title: doc.title,
+    description: doc.description,
+    price: Number(doc.price),
+    location: doc.location,
+    city: doc.city,
+    state: doc.state,
+    zipCode: doc.zipCode ?? null,
+    propertyType: doc.propertyType,
+    listingType: doc.listingType,
+    bedrooms: Number(doc.bedrooms),
+    bathrooms: Number(doc.bathrooms),
+    squareFeet: Number(doc.squareFeet),
+    images: normalizedImages,
+    videoUrl: extra.videoUrl ?? null,
+    furnishing: extra.furnishing ?? null,
+    parking: extra.parking ?? null,
+    balcony: extra.balcony ?? null,
+    availableFor: extra.availableFor ?? null,
+    genderPreference: extra.genderPreference ?? null,
+    foodIncluded: typeof extra.foodIncluded === "boolean" ? extra.foodIncluded : null,
+    attachedBathroom: typeof extra.attachedBathroom === "boolean" ? extra.attachedBathroom : null,
+    plotFacing: extra.plotFacing ?? null,
+    rejectionReason: extra.rejectionReason ?? null,
+    featured: Boolean(doc.featured),
+    status: doc.status,
+    approvalStatus: doc.approvalStatus ?? "pending",
+    feeStatus: extra.feeStatus ?? "open",
+    createdBy: doc.createdBy,
+    ownerName: extra.ownerName ?? null,
+    ownerEmail: extra.ownerEmail ?? null,
+    ownerPhone: extra.ownerPhone ?? null,
+    latitude: extra.latitude ?? null,
+    longitude: extra.longitude ?? null,
+    createdAt: doc.$createdAt,
+    updatedAt: doc.$updatedAt,
+  };
+}
+
+function mapInquiry(doc: InquiryDocument): InquiryRecord {
+  return {
+    id: Number(doc.id),
+    propertyId: Number(doc.propertyId),
+    name: doc.name,
+    email: doc.email,
+    phone: doc.phone ?? null,
+    message: doc.message,
+    status: doc.status,
+    createdAt: doc.$createdAt,
+  };
+}
+
+function mapOwnerMessage(doc: OwnerMessageDocument): OwnerMessageRecord {
+  return {
+    id: Number(doc.id),
+    propertyId: Number(doc.propertyId),
+    senderRole: doc.senderRole,
+    content: doc.content,
+    createdAt: doc.$createdAt,
+  };
+}
+
+function mapPlatformSettings(doc: PlatformSettingsDocument): PlatformSettingsRecord {
+  return {
+    id: Number(doc.id),
+    teamName: doc.teamName,
+    tagline: doc.tagline,
+    contactPhone: doc.contactPhone,
+    contactEmail: doc.contactEmail,
+    updatedAt: doc.$updatedAt,
+  };
+}
+
+function mapContactMessage(doc: ContactMessageDocument): ContactMessageRecord {
+  return {
+    id: Number(doc.id),
+    name: doc.name,
+    email: doc.email,
+    phone: doc.phone ?? null,
+    subject: doc.subject ?? null,
+    message: doc.message,
+    status: doc.status,
+    createdAt: doc.$createdAt,
+  };
+}
+
+async function listDocuments<T extends Models.Document>(
+  collectionId: string,
+  queries: string[] = []
+) {
+  const response = await getDatabases().listDocuments<T>({
+    databaseId: assertEnv(appwriteDatabaseId, "APPWRITE_DATABASE_ID"),
+    collectionId,
+    queries,
+  });
+
+  return response.documents;
+}
+
+async function getDocumentByField<T extends Models.Document>(
+  collectionId: string,
+  field: string,
+  value: string | number | boolean
+) {
+  const documents = await listDocuments<T>(collectionId, [
+    Query.equal(field, value),
+    Query.limit(1),
+  ]);
+
+  return documents[0];
+}
+
+async function upsertDocument<T extends Models.Document>(
+  collectionId: string,
+  documentId: string,
+  data: Record<string, any>
+) {
+  const databases = getDatabases();
+  const databaseId = assertEnv(appwriteDatabaseId, "APPWRITE_DATABASE_ID");
+
+  try {
+    return await databases.updateDocument<T>({
+      databaseId,
+      collectionId,
+      documentId,
+      data: data as any,
+    });
+  } catch {
+    return databases.createDocument<T>({
+      databaseId,
+      collectionId,
+      documentId,
+      data: data as any,
+    });
+  }
+}
+
+function normalizePropertyPayload(property: Record<string, any>) {
+  const extraDetails = sanitizeExtraPropertyDetails(property);
+  return {
+    title: property.title,
+    description: property.description,
+    price: Number(property.price),
+    location: property.location,
+    city: property.city,
+    state: property.state,
+    zipCode: property.zipCode ?? null,
+    propertyType: property.propertyType,
+    listingType: property.listingType,
+    bedrooms: Number(property.bedrooms),
+    bathrooms: Number(property.bathrooms),
+    squareFeet: Number(property.squareFeet),
+    images: normalizeImages(property.images),
+    featured: Boolean(property.featured),
+    status: property.status ?? "available",
+    approvalStatus: property.approvalStatus ?? "pending",
+    createdBy: property.createdBy,
+    extra: JSON.stringify({
+      feeStatus: property.feeStatus ?? "open",
+      ownerName: property.ownerName ?? null,
+      ownerEmail: property.ownerEmail ?? null,
+      ownerPhone: property.ownerPhone ?? null,
+      latitude: property.latitude ?? null,
+      longitude: property.longitude ?? null,
+      videoUrl: property.videoUrl ?? null,
+      ...extraDetails,
+    }),
+  };
+}
+
+async function inferLoginMethod(account: Account) {
+  try {
+    const identities = await account.listIdentities();
+    return identities.identities?.[0]?.provider ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getUserFromAccessToken(accessToken: string): Promise<AppUser | null> {
   if (!accessToken) return null;
 
-  const supabase = getSupabaseAdmin();
-  const {
-    data: { user },
-    error: authError,
-  } = await (supabase.auth as any).getUser(accessToken);
+  try {
+    const account = new Account(getAppwriteUserClient(accessToken));
+    const currentUser = await account.get();
+    const loginMethod = await inferLoginMethod(account);
+    const role: AppUser["role"] = isAdminEmail(currentUser.email) ? "admin" : "user";
+    const usersCollectionId = optionalCollectionId("users");
 
-  if (authError || !user) {
+    if (usersCollectionId) {
+      const syncedUser = await upsertDocument<UserDocument>(usersCollectionId, currentUser.$id, {
+        email: currentUser.email ?? null,
+        name: currentUser.name || currentUser.email || null,
+        loginMethod,
+        role,
+        lastSignedIn: new Date().toISOString(),
+      });
+      return mapUser(syncedUser);
+    }
+
+    return {
+      id: currentUser.$id,
+      openId: currentUser.$id,
+      email: currentUser.email ?? null,
+      name: currentUser.name || currentUser.email || null,
+      role,
+      loginMethod,
+      createdAt: currentUser.$createdAt,
+      updatedAt: currentUser.$updatedAt,
+      lastSignedIn: currentUser.$updatedAt,
+    };
+  } catch {
     return null;
   }
-
-  const loginMethod = inferLoginMethod(user);
-  const role: AppUser["role"] = isAdminEmail(user.email) ? "admin" : "user";
-
-  const upsertPayload = {
-    id: user.id,
-    email: user.email ?? null,
-    name:
-      typeof user.user_metadata?.full_name === "string"
-        ? user.user_metadata.full_name
-        : typeof user.user_metadata?.name === "string"
-          ? user.user_metadata.name
-          : user.email ?? null,
-    login_method: loginMethod,
-    role,
-    last_signed_in: new Date().toISOString(),
-  };
-
-  const { data, error } = await supabase
-    .from("users")
-    .upsert(upsertPayload, { onConflict: "id" })
-    .select("*")
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to sync user with Supabase: ${error.message}`);
-  }
-
-  return mapUser(data);
 }
 
 export async function upsertUser(user: LegacyInsertUser): Promise<void> {
-  await getSupabaseAdmin().from("users").upsert(
-    {
-      id: user.openId,
-      email: user.email ?? null,
-      name: user.name ?? null,
-      login_method: user.loginMethod ?? null,
-      role: user.role ?? "user",
-      last_signed_in: user.lastSignedIn?.toISOString() ?? new Date().toISOString(),
-    },
-    { onConflict: "id" }
-  );
+  const usersCollectionId = requireCollectionId("users");
+
+  await upsertDocument<UserDocument>(usersCollectionId, user.openId, {
+    email: user.email ?? null,
+    name: user.name ?? null,
+    loginMethod: user.loginMethod ?? null,
+    role: user.role ?? (isAdminEmail(user.email) ? "admin" : "user"),
+    lastSignedIn: (user.lastSignedIn ?? new Date()).toISOString(),
+  });
 }
 
 export async function getUserByOpenId(openId: string): Promise<AppUser | undefined> {
-  const { data, error } = await getSupabaseAdmin()
-    .from("users")
-    .select("*")
-    .eq("id", openId)
-    .maybeSingle();
+  const usersCollectionId = requireCollectionId("users");
 
-  if (error) {
-    throw new Error(`Failed to fetch user: ${error.message}`);
+  try {
+    const document = await getDatabases().getDocument<UserDocument>({
+      databaseId: assertEnv(appwriteDatabaseId, "APPWRITE_DATABASE_ID"),
+      collectionId: usersCollectionId,
+      documentId: openId,
+    });
+    return mapUser(document);
+  } catch {
+    return undefined;
   }
-
-  return data ? mapUser(data) : undefined;
-}
-
-function applyPropertyFilters(
-  query: any,
-  filters: PropertyFilters
-) {
-  let next: any = query;
-  if (filters.city) next = next.eq("city", filters.city);
-  if (filters.propertyType) next = next.eq("property_type", filters.propertyType);
-  if (filters.listingType) next = next.eq("listing_type", filters.listingType);
-  if (filters.minPrice !== undefined) next = next.gte("price", filters.minPrice);
-  if (filters.maxPrice !== undefined) next = next.lte("price", filters.maxPrice);
-  if (filters.bedrooms !== undefined) next = next.gte("bedrooms", filters.bedrooms);
-  if (filters.bathrooms !== undefined) next = next.gte("bathrooms", filters.bathrooms);
-  return next;
 }
 
 export async function getAllProperties(): Promise<PropertyRecord[]> {
-  const { data, error } = await getSupabaseAdmin()
-    .from("properties")
-    .select("*")
-    .eq("approval_status", "approved")
-    .order("created_at", { ascending: false });
+  const documents = await listDocuments<PropertyDocument>(requireCollectionId("properties"), [
+    Query.equal("approvalStatus", "approved"),
+    Query.orderDesc("$createdAt"),
+    Query.limit(MAX_LIST_LIMIT),
+  ]);
 
-  if (error) {
-    throw new Error(`Failed to fetch properties: ${error.message}`);
-  }
-
-  return (data ?? []).map(mapProperty);
+  return documents.map(mapProperty);
 }
 
 export async function getFeaturedProperties(): Promise<PropertyRecord[]> {
-  const { data, error } = await getSupabaseAdmin()
-    .from("properties")
-    .select("*")
-    .eq("featured", true)
-    .eq("approval_status", "approved")
-    .order("created_at", { ascending: false })
-    .limit(6);
+  const documents = await listDocuments<PropertyDocument>(requireCollectionId("properties"), [
+    Query.equal("featured", true),
+    Query.equal("approvalStatus", "approved"),
+    Query.orderDesc("$createdAt"),
+    Query.limit(6),
+  ]);
 
-  if (error) {
-    throw new Error(`Failed to fetch featured properties: ${error.message}`);
-  }
-
-  return (data ?? []).map(mapProperty);
+  return documents.map(mapProperty);
 }
 
 export async function getPropertyById(id: number): Promise<PropertyRecord | undefined> {
-  const { data, error } = await getSupabaseAdmin()
-    .from("properties")
-    .select("*")
-    .eq("id", id)
-    .eq("approval_status", "approved")
-    .maybeSingle();
+  const document = await getDocumentByField<PropertyDocument>(
+    requireCollectionId("properties"),
+    "id",
+    id
+  );
 
-  if (error) {
-    throw new Error(`Failed to fetch property: ${error.message}`);
+  if (!document || document.approvalStatus !== "approved") {
+    return undefined;
   }
 
-  return data ? mapProperty(data) : undefined;
+  return mapProperty(document);
 }
 
 export async function getAdminPropertyById(id: number): Promise<PropertyRecord | undefined> {
-  const { data, error } = await getSupabaseAdmin()
-    .from("properties")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  const document = await getDocumentByField<PropertyDocument>(
+    requireCollectionId("properties"),
+    "id",
+    id
+  );
 
-  if (error) {
-    throw new Error(`Failed to fetch admin property: ${error.message}`);
-  }
-
-  return data ? mapProperty(data) : undefined;
+  return document ? mapProperty(document) : undefined;
 }
 
 export async function searchProperties(filters: PropertyFilters) {
-  let query = getSupabaseAdmin()
-    .from("properties")
-    .select("*")
-    .eq("approval_status", "approved");
+  const queries = [Query.equal("approvalStatus", "approved"), Query.orderDesc("$createdAt")];
 
-  query = applyPropertyFilters(query, filters);
-
-  const { data, error } = await query.order("created_at", { ascending: false });
-
-  if (error) {
-    throw new Error(`Failed to search properties: ${error.message}`);
+  if (filters.city) queries.push(Query.equal("city", filters.city));
+  if (filters.propertyType) queries.push(Query.equal("propertyType", filters.propertyType));
+  if (filters.listingType) queries.push(Query.equal("listingType", filters.listingType));
+  if (filters.minPrice !== undefined) queries.push(Query.greaterThanEqual("price", filters.minPrice));
+  if (filters.maxPrice !== undefined) queries.push(Query.lessThanEqual("price", filters.maxPrice));
+  if (filters.bedrooms !== undefined) queries.push(Query.greaterThanEqual("bedrooms", filters.bedrooms));
+  if (filters.bathrooms !== undefined) {
+    queries.push(Query.greaterThanEqual("bathrooms", filters.bathrooms));
   }
 
-  return (data ?? []).map(mapProperty);
+  queries.push(Query.limit(MAX_LIST_LIMIT));
+
+  const documents = await listDocuments<PropertyDocument>(requireCollectionId("properties"), queries);
+  return documents.map(mapProperty);
 }
 
 export async function getAdminProperties(filters: PropertyFilters = {}) {
-  let query = getSupabaseAdmin().from("properties").select("*");
-  query = applyPropertyFilters(query, filters);
+  const queries = [Query.orderDesc("$createdAt"), Query.limit(MAX_LIST_LIMIT)];
 
-  const { data, error } = await query.order("created_at", { ascending: false });
-
-  if (error) {
-    throw new Error(`Failed to search properties: ${error.message}`);
+  if (filters.city) queries.push(Query.equal("city", filters.city));
+  if (filters.propertyType) queries.push(Query.equal("propertyType", filters.propertyType));
+  if (filters.listingType) queries.push(Query.equal("listingType", filters.listingType));
+  if (filters.minPrice !== undefined) queries.push(Query.greaterThanEqual("price", filters.minPrice));
+  if (filters.maxPrice !== undefined) queries.push(Query.lessThanEqual("price", filters.maxPrice));
+  if (filters.bedrooms !== undefined) queries.push(Query.greaterThanEqual("bedrooms", filters.bedrooms));
+  if (filters.bathrooms !== undefined) {
+    queries.push(Query.greaterThanEqual("bathrooms", filters.bathrooms));
   }
 
-  return (data ?? []).map(mapProperty);
+  const documents = await listDocuments<PropertyDocument>(requireCollectionId("properties"), queries);
+  return documents.map(mapProperty);
 }
 
 export async function getOwnerProperties(ownerId: string) {
-  const { data, error } = await getSupabaseAdmin()
-    .from("properties")
-    .select("*")
-    .eq("created_by", ownerId)
-    .order("created_at", { ascending: false });
+  const documents = await listDocuments<PropertyDocument>(requireCollectionId("properties"), [
+    Query.equal("createdBy", ownerId),
+    Query.orderDesc("$createdAt"),
+    Query.limit(MAX_LIST_LIMIT),
+  ]);
 
-  if (error) {
-    throw new Error(`Failed to fetch owner properties: ${error.message}`);
-  }
-
-  return (data ?? []).map(mapProperty);
+  return documents.map(mapProperty);
 }
 
 export async function createProperty(property: Record<string, any>) {
-  const { data, error } = await getSupabaseAdmin()
-    .from("properties")
-    .insert(normalizePropertyPayload(property))
-    .select("*")
-    .single();
+  const id = Number(property.id ?? buildNumericId());
+  const document = await getDatabases().createDocument<PropertyDocument>({
+    databaseId: assertEnv(appwriteDatabaseId, "APPWRITE_DATABASE_ID"),
+    collectionId: requireCollectionId("properties"),
+    documentId: ID.unique(),
+    data: {
+      id,
+      ...normalizePropertyPayload(property),
+    },
+  });
 
-  if (error) {
-    throw new Error(`Failed to create property: ${error.message}`);
-  }
-
-  return mapProperty(data);
+  return mapProperty(document);
 }
 
 export async function createOwnerListing(property: Record<string, any>) {
@@ -494,111 +765,135 @@ export async function createOwnerListing(property: Record<string, any>) {
 }
 
 export async function updateProperty(id: number, property: Record<string, any>) {
-  const { data, error } = await getSupabaseAdmin()
-    .from("properties")
-    .update(normalizePropertyPayload(property))
-    .eq("id", id)
-    .select("*")
-    .single();
+  const existing = await getDocumentByField<PropertyDocument>(
+    requireCollectionId("properties"),
+    "id",
+    id
+  );
 
-  if (error) {
-    throw new Error(`Failed to update property: ${error.message}`);
+  if (!existing) {
+    throw new Error(`Property ${id} not found`);
   }
 
-  return mapProperty(data);
+  const existingProperty = mapProperty(existing);
+  const previousMediaUrls = [
+    ...parseImageUrls(existingProperty.images),
+    ...(existingProperty.videoUrl ? [existingProperty.videoUrl] : []),
+  ];
+
+  const document = await getDatabases().updateDocument<PropertyDocument>({
+    databaseId: assertEnv(appwriteDatabaseId, "APPWRITE_DATABASE_ID"),
+    collectionId: requireCollectionId("properties"),
+    documentId: existing.$id,
+    data: {
+      id,
+      ...normalizePropertyPayload({
+        ...existingProperty,
+        ...property,
+        createdBy: property.createdBy ?? property.created_by ?? existing.createdBy,
+      }),
+    },
+  });
+
+  const updatedProperty = mapProperty(document);
+  const nextMediaUrls = [
+    ...parseImageUrls(updatedProperty.images),
+    ...(updatedProperty.videoUrl ? [updatedProperty.videoUrl] : []),
+  ];
+  const removedMediaUrls = previousMediaUrls.filter(url => !nextMediaUrls.includes(url));
+  await cleanupMediaUrls(removedMediaUrls);
+
+  return updatedProperty;
 }
 
 export async function deleteProperty(id: number) {
-  const { error } = await getSupabaseAdmin().from("properties").delete().eq("id", id);
+  const existing = await getDocumentByField<PropertyDocument>(
+    requireCollectionId("properties"),
+    "id",
+    id
+  );
 
-  if (error) {
-    throw new Error(`Failed to delete property: ${error.message}`);
+  if (!existing) {
+    throw new Error(`Property ${id} not found`);
   }
+
+  const existingProperty = mapProperty(existing);
+
+  await getDatabases().deleteDocument({
+    databaseId: assertEnv(appwriteDatabaseId, "APPWRITE_DATABASE_ID"),
+    collectionId: requireCollectionId("properties"),
+    documentId: existing.$id,
+  });
+
+  await cleanupMediaUrls([
+    ...parseImageUrls(existingProperty.images),
+    ...(existingProperty.videoUrl ? [existingProperty.videoUrl] : []),
+  ]);
 
   return { success: true } as const;
 }
 
 export async function createInquiry(inquiry: Record<string, any>) {
-  const { data, error } = await getSupabaseAdmin()
-    .from("inquiries")
-    .insert({
-      property_id: inquiry.propertyId,
+  const document = await getDatabases().createDocument<InquiryDocument>({
+    databaseId: assertEnv(appwriteDatabaseId, "APPWRITE_DATABASE_ID"),
+    collectionId: requireCollectionId("inquiries"),
+    documentId: ID.unique(),
+    data: {
+      id: buildNumericId(),
+      propertyId: Number(inquiry.propertyId),
       name: inquiry.name,
       email: inquiry.email,
       phone: inquiry.phone ?? null,
       message: inquiry.message,
       status: inquiry.status ?? "new",
-    })
-    .select("*")
-    .single();
+    },
+  });
 
-  if (error) {
-    throw new Error(`Failed to create inquiry: ${error.message}`);
-  }
-
-  return mapInquiry(data);
+  return mapInquiry(document);
 }
 
 export async function getInquiriesByProperty(propertyId: number) {
-  const { data, error } = await getSupabaseAdmin()
-    .from("inquiries")
-    .select("*")
-    .eq("property_id", propertyId)
-    .order("created_at", { ascending: false });
+  const documents = await listDocuments<InquiryDocument>(requireCollectionId("inquiries"), [
+    Query.equal("propertyId", propertyId),
+    Query.orderDesc("$createdAt"),
+    Query.limit(MAX_LIST_LIMIT),
+  ]);
 
-  if (error) {
-    throw new Error(`Failed to fetch inquiries: ${error.message}`);
-  }
-
-  return (data ?? []).map(mapInquiry);
+  return documents.map(mapInquiry);
 }
 
 export async function getAllInquiries() {
-  const { data, error } = await getSupabaseAdmin()
-    .from("inquiries")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const documents = await listDocuments<InquiryDocument>(requireCollectionId("inquiries"), [
+    Query.orderDesc("$createdAt"),
+    Query.limit(MAX_LIST_LIMIT),
+  ]);
 
-  if (error) {
-    throw new Error(`Failed to fetch inquiries: ${error.message}`);
-  }
-
-  return (data ?? []).map(mapInquiry);
+  return documents.map(mapInquiry);
 }
 
 export async function getOwnerMessages(ownerId: string) {
   const ownerProperties = await getOwnerProperties(ownerId);
-  const propertyIds = ownerProperties.map((property: PropertyRecord) => property.id);
+  const propertyIds = ownerProperties.map(property => property.id);
 
   if (propertyIds.length === 0) {
     return [] as OwnerMessageRecord[];
   }
 
-  const { data, error } = await getSupabaseAdmin()
-    .from("owner_messages")
-    .select("*")
-    .in("property_id", propertyIds)
-    .order("created_at", { ascending: false });
+  const documents = await listDocuments<OwnerMessageDocument>(
+    requireCollectionId("ownerMessages"),
+    [Query.equal("propertyId", propertyIds), Query.orderDesc("$createdAt"), Query.limit(MAX_LIST_LIMIT)]
+  );
 
-  if (error) {
-    throw new Error(`Failed to fetch owner messages: ${error.message}`);
-  }
-
-  return (data ?? []).map(mapOwnerMessage);
+  return documents.map(mapOwnerMessage);
 }
 
 export async function getPropertyMessages(propertyId: number) {
-  const { data, error } = await getSupabaseAdmin()
-    .from("owner_messages")
-    .select("*")
-    .eq("property_id", propertyId)
-    .order("created_at", { ascending: false });
+  const documents = await listDocuments<OwnerMessageDocument>(
+    requireCollectionId("ownerMessages"),
+    [Query.equal("propertyId", propertyId), Query.orderDesc("$createdAt"), Query.limit(MAX_LIST_LIMIT)]
+  );
 
-  if (error) {
-    throw new Error(`Failed to fetch property messages: ${error.message}`);
-  }
-
-  return (data ?? []).map(mapOwnerMessage);
+  return documents.map(mapOwnerMessage);
 }
 
 export async function createOwnerMessage(input: {
@@ -606,35 +901,33 @@ export async function createOwnerMessage(input: {
   senderRole: "admin" | "owner";
   content: string;
 }) {
-  const { data, error } = await getSupabaseAdmin()
-    .from("owner_messages")
-    .insert({
-      property_id: input.propertyId,
-      sender_role: input.senderRole,
+  const document = await getDatabases().createDocument<OwnerMessageDocument>({
+    databaseId: assertEnv(appwriteDatabaseId, "APPWRITE_DATABASE_ID"),
+    collectionId: requireCollectionId("ownerMessages"),
+    documentId: ID.unique(),
+    data: {
+      id: buildNumericId(),
+      propertyId: Number(input.propertyId),
+      senderRole: input.senderRole,
       content: input.content,
-    })
-    .select("*")
-    .single();
+    },
+  });
 
-  if (error) {
-    throw new Error(`Failed to create owner message: ${error.message}`);
-  }
-
-  return mapOwnerMessage(data);
+  return mapOwnerMessage(document);
 }
 
 export async function getPlatformSettings() {
-  const { data, error } = await getSupabaseAdmin()
-    .from("platform_settings")
-    .select("*")
-    .eq("id", 1)
-    .maybeSingle();
+  const collectionId = requireCollectionId("platformSettings");
+  const databaseId = assertEnv(appwriteDatabaseId, "APPWRITE_DATABASE_ID");
 
-  if (error) {
-    throw new Error(`Failed to fetch platform settings: ${error.message}`);
-  }
-
-  if (!data) {
+  try {
+    const document = await getDatabases().getDocument<PlatformSettingsDocument>({
+      databaseId,
+      collectionId,
+      documentId: PLATFORM_SETTINGS_DOC_ID,
+    });
+    return mapPlatformSettings(document);
+  } catch {
     return {
       id: 1,
       teamName: "Fastbookr Team",
@@ -643,8 +936,6 @@ export async function getPlatformSettings() {
       contactEmail: "team@fastbookr.com",
     } satisfies PlatformSettingsRecord;
   }
-
-  return mapPlatformSettings(data);
 }
 
 export async function upsertPlatformSettings(input: {
@@ -653,27 +944,19 @@ export async function upsertPlatformSettings(input: {
   contactPhone: string;
   contactEmail: string;
 }) {
-  const { data, error } = await getSupabaseAdmin()
-    .from("platform_settings")
-    .upsert(
-      {
-        id: 1,
-        team_name: input.teamName,
-        tagline: input.tagline,
-        contact_phone: input.contactPhone,
-        contact_email: input.contactEmail,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    )
-    .select("*")
-    .single();
+  const document = await upsertDocument<PlatformSettingsDocument>(
+    requireCollectionId("platformSettings"),
+    PLATFORM_SETTINGS_DOC_ID,
+    {
+      id: 1,
+      teamName: input.teamName,
+      tagline: input.tagline,
+      contactPhone: input.contactPhone,
+      contactEmail: input.contactEmail,
+    }
+  );
 
-  if (error) {
-    throw new Error(`Failed to update platform settings: ${error.message}`);
-  }
-
-  return mapPlatformSettings(data);
+  return mapPlatformSettings(document);
 }
 
 export async function createContactMessage(input: {
@@ -683,70 +966,98 @@ export async function createContactMessage(input: {
   subject?: string | null;
   message: string;
 }) {
-  const { data, error } = await getSupabaseAdmin()
-    .from("contact_messages")
-    .insert({
+  const document = await getDatabases().createDocument<ContactMessageDocument>({
+    databaseId: assertEnv(appwriteDatabaseId, "APPWRITE_DATABASE_ID"),
+    collectionId: requireCollectionId("contactMessages"),
+    documentId: ID.unique(),
+    data: {
+      id: buildNumericId(),
       name: input.name,
       email: input.email,
       phone: input.phone ?? null,
       subject: input.subject ?? null,
       message: input.message,
       status: "new",
-    })
-    .select("*")
-    .single();
+    },
+  });
 
-  if (error) {
-    throw new Error(`Failed to create contact message: ${error.message}`);
-  }
-
-  return mapContactMessage(data);
+  return mapContactMessage(document);
 }
 
 export async function getAllContactMessages() {
-  const { data, error } = await getSupabaseAdmin()
-    .from("contact_messages")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const documents = await listDocuments<ContactMessageDocument>(
+    requireCollectionId("contactMessages"),
+    [Query.orderDesc("$createdAt"), Query.limit(MAX_LIST_LIMIT)]
+  );
 
-  if (error) {
-    throw new Error(`Failed to fetch contact messages: ${error.message}`);
-  }
-
-  return (data ?? []).map(mapContactMessage);
+  return documents.map(mapContactMessage);
 }
 
 export async function updateContactMessageStatus(
   id: number,
   status: "new" | "reviewed" | "closed"
 ) {
-  const { data, error } = await getSupabaseAdmin()
-    .from("contact_messages")
-    .update({ status })
-    .eq("id", id)
-    .select("*")
-    .single();
+  const existing = await getDocumentByField<ContactMessageDocument>(
+    requireCollectionId("contactMessages"),
+    "id",
+    id
+  );
 
-  if (error) {
-    throw new Error(`Failed to update contact message: ${error.message}`);
+  if (!existing) {
+    throw new Error(`Contact message ${id} not found`);
   }
 
-  return mapContactMessage(data);
+  const document = await getDatabases().updateDocument<ContactMessageDocument>({
+    databaseId: assertEnv(appwriteDatabaseId, "APPWRITE_DATABASE_ID"),
+    collectionId: requireCollectionId("contactMessages"),
+    documentId: existing.$id,
+    data: { status },
+  });
+
+  return mapContactMessage(document);
 }
 
 export async function updateInquiryStatus(id: number, status: string) {
-  const { data, error } = await getSupabaseAdmin()
-    .from("inquiries")
-    .update({ status })
-    .eq("id", id)
-    .select("*")
-    .single();
+  const existing = await getDocumentByField<InquiryDocument>(
+    requireCollectionId("inquiries"),
+    "id",
+    id
+  );
 
-  if (error) {
-    throw new Error(`Failed to update inquiry: ${error.message}`);
+  if (!existing) {
+    throw new Error(`Inquiry ${id} not found`);
   }
 
-  return mapInquiry(data);
+  const document = await getDatabases().updateDocument<InquiryDocument>({
+    databaseId: assertEnv(appwriteDatabaseId, "APPWRITE_DATABASE_ID"),
+    collectionId: requireCollectionId("inquiries"),
+    documentId: existing.$id,
+    data: { status },
+  });
+
+  return mapInquiry(document);
+}
+
+async function uploadPropertyMedia(
+  key: string,
+  data: Buffer,
+  _contentType: string
+): Promise<{ key: string; url: string }> {
+  const fileId = ID.unique();
+  const fileName = key.split("/").pop() || `${fileId}.jpg`;
+  const storage = new Storage(getAppwriteAdminClient());
+
+  await storage.createFile({
+    bucketId: assertEnv(storageBucket, "APPWRITE_BUCKET_ID"),
+    fileId,
+    file: InputFile.fromBuffer(data, fileName),
+    permissions: [Permission.read(Role.any())],
+  });
+
+  return {
+    key: fileId,
+    url: getPublicFileUrl(fileId),
+  };
 }
 
 export async function uploadPropertyImage(
@@ -754,22 +1065,13 @@ export async function uploadPropertyImage(
   data: Buffer,
   contentType: string
 ): Promise<{ key: string; url: string }> {
-  const supabase = getSupabaseAdmin();
-  const { error } = await supabase.storage
-    .from(storageBucket)
-    .upload(key, data, {
-      contentType,
-      upsert: true,
-    });
+  return uploadPropertyMedia(key, data, contentType);
+}
 
-  if (error) {
-    throw new Error(`Failed to upload image: ${error.message}`);
-  }
-
-  const { data: publicData } = supabase.storage.from(storageBucket).getPublicUrl(key);
-
-  return {
-    key,
-    url: publicData.publicUrl,
-  };
+export async function uploadPropertyVideo(
+  key: string,
+  data: Buffer,
+  contentType: string
+): Promise<{ key: string; url: string }> {
+  return uploadPropertyMedia(key, data, contentType);
 }

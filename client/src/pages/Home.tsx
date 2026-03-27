@@ -13,6 +13,7 @@ import {
   Star, ChevronLeft, ChevronRight, Heart
 } from "lucide-react";
 import { PlacesAutocomplete } from "@/components/PlacesAutocomplete";
+import { getPropertyStats } from "@/lib/propertyDisplay";
 
 // Image constants
 const HERO_BG = "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1920&q=80";
@@ -136,6 +137,7 @@ export default function Home() {
   const PropertyCard = ({ property, featured = false }: { property: any; featured?: boolean }) => {
     const images = parseImages(property.images);
     const mainImage = images[0] || "https://placehold.co/600x400/e2e8f0/94a3b8?text=Property";
+    const stats = getPropertyStats(property);
     return (
       <Link href={`/properties/${property.id}`}>
         <Card className={`group overflow-hidden border border-gray-100 hover:shadow-xl transition-all duration-300 cursor-pointer ${featured ? "" : ""}`}>
@@ -167,16 +169,19 @@ export default function Home() {
             <h3 className="font-semibold text-foreground text-base mb-3 truncate group-hover:text-primary transition-colors">
               {property.title}
             </h3>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
-              <span className="flex items-center gap-1">
-                <BedDouble className="w-4 h-4" /> {property.bedrooms}
-              </span>
-              <span className="flex items-center gap-1">
-                <Bath className="w-4 h-4" /> {property.bathrooms}
-              </span>
-              <span className="flex items-center gap-1">
-                <Maximize className="w-4 h-4" /> {property.squareFeet?.toLocaleString()} sqft
-              </span>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4 flex-wrap">
+              {stats.map((item) => (
+                <span key={item.key} className="flex items-center gap-1">
+                  {item.key === "bedrooms" ? (
+                    <BedDouble className="w-4 h-4" />
+                  ) : item.key === "bathrooms" ? (
+                    <Bath className="w-4 h-4" />
+                  ) : (
+                    <Maximize className="w-4 h-4" />
+                  )}{" "}
+                  {item.value} {item.shortLabel}
+                </span>
+              ))}
             </div>
             <div className="flex items-center justify-between pt-3 border-t border-gray-100">
               <span className="text-lg font-bold text-primary">{formatPrice(property.price)}</span>

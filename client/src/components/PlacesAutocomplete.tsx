@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { MapPin } from "lucide-react";
+import { loadGoogleMapsScript } from "@/lib/googleMaps";
 
 interface PlaceResult {
   address: string;
@@ -32,36 +33,46 @@ export function PlacesAutocomplete({
   const [suggestions, setSuggestions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
+  const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dummyMapRef = useRef<HTMLDivElement>(null);
 
   // Initialize Google Maps services
   useEffect(() => {
-    const initServices = () => {
+    let isMounted = true;
+
+    const initServices = async () => {
+      try {
+        await loadGoogleMapsScript();
+      } catch {
+        if (isMounted) {
+          setLoadError("Location autocomplete is unavailable right now. You can still type the address manually.");
+        }
+        return;
+      }
+
+      if (!isMounted) return;
+
       if (window.google && window.google.maps && window.google.maps.places) {
         autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+        sessionTokenRef.current = new google.maps.places.AutocompleteSessionToken();
         // PlacesService needs a map or div element
         if (dummyMapRef.current) {
           placesServiceRef.current = new google.maps.places.PlacesService(dummyMapRef.current);
         }
         setIsLoaded(true);
+        setLoadError(null);
       }
     };
 
-    // Try immediately
     initServices();
 
-    // Also try after a delay in case Maps API is still loading
-    if (!isLoaded) {
-      const timer = setTimeout(initServices, 1000);
-      const timer2 = setTimeout(initServices, 3000);
-      return () => {
-        clearTimeout(timer);
-        clearTimeout(timer2);
-      };
-    }
+    return () => {
+      isMounted = false;
+    };
   }, [isLoaded]);
 
   // Close suggestions when clicking outside
@@ -81,10 +92,15 @@ export function PlacesAutocomplete({
       return;
     }
 
+    if (!sessionTokenRef.current && window.google?.maps?.places) {
+      sessionTokenRef.current = new google.maps.places.AutocompleteSessionToken();
+    }
+
     autocompleteServiceRef.current.getPlacePredictions(
       {
         input,
         types: ["geocode", "establishment"],
+        sessionToken: sessionTokenRef.current ?? undefined,
       },
       (predictions, status) => {
         if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
@@ -97,11 +113,28 @@ export function PlacesAutocomplete({
     );
   }, []);
 
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const trimmedValue = value.trim();
+    const timeout = window.setTimeout(() => {
+      fetchSuggestions(trimmedValue);
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [fetchSuggestions, isLoaded, value]);
+
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     onChange(newValue);
-    fetchSuggestions(newValue);
-  }, [onChange, fetchSuggestions]);
+    if (newValue.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      sessionTokenRef.current = window.google?.maps?.places
+        ? new google.maps.places.AutocompleteSessionToken()
+        : null;
+    }
+  }, [onChange]);
 
   const handleSelectPlace = useCallback((prediction: google.maps.places.AutocompletePrediction) => {
     if (!placesServiceRef.current) return;
@@ -110,6 +143,7 @@ export function PlacesAutocomplete({
       {
         placeId: prediction.place_id,
         fields: ["formatted_address", "geometry", "address_components"],
+        sessionToken: sessionTokenRef.current ?? undefined,
       },
       (place, status) => {
         if (status === google.maps.places.PlacesServiceStatus.OK && place) {
@@ -143,6 +177,9 @@ export function PlacesAutocomplete({
           onPlaceSelect(result);
           setShowSuggestions(false);
           setSuggestions([]);
+          sessionTokenRef.current = window.google?.maps?.places
+            ? new google.maps.places.AutocompleteSessionToken()
+            : null;
         }
       }
     );
@@ -192,6 +229,9 @@ export function PlacesAutocomplete({
             <img src="https://maps.gstatic.com/mapfiles/api-3/images/powered-by-google-on-white3_hdpi.png" alt="Powered by Google" className="h-3" />
           </div>
         </div>
+      )}
+      {loadError && (
+        <div className="mt-1 text-xs text-amber-700">{loadError}</div>
       )}
     </div>
   );

@@ -8,6 +8,23 @@ import { MapPin } from "lucide-react";
 import { MapView } from "@/components/Map";
 import { ImageUploader } from "@/components/ImageUploader";
 import { PlacesAutocomplete } from "@/components/PlacesAutocomplete";
+import { VideoUploader } from "@/components/VideoUploader";
+import {
+  getAreaLabel,
+  getPropertyTypeGuidance,
+  normalizeBathroomValue,
+  normalizeBedroomValue,
+  usesAttachedBathroomField,
+  usesAvailableForField,
+  usesBalconyField,
+  usesBathroomCount,
+  usesBedroomCount,
+  usesFoodIncludedField,
+  usesFurnishingField,
+  usesGenderPreferenceField,
+  usesParkingField,
+  usesPlotFacingField,
+} from "@/lib/propertyDisplay";
 
 interface PropertyFormData {
   title: string;
@@ -23,6 +40,16 @@ interface PropertyFormData {
   bathrooms: string;
   squareFeet: string;
   images: string;
+  videoUrl: string;
+  furnishing: string;
+  parking: string;
+  balcony: string;
+  availableFor: string;
+  genderPreference: string;
+  foodIncluded: string;
+  attachedBathroom: string;
+  plotFacing: string;
+  rejectionReason: string;
   featured: string;
   approvalStatus: string;
   feeStatus: string;
@@ -55,6 +82,18 @@ export function PropertyForm({
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [mapMarker, setMapMarker] = useState<google.maps.marker.AdvancedMarkerElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
+  const showBedroomField = usesBedroomCount(formData.propertyType);
+  const showBathroomField = usesBathroomCount(formData.propertyType);
+  const showFurnishingField = usesFurnishingField(formData.propertyType);
+  const showParkingField = usesParkingField(formData.propertyType);
+  const showBalconyField = usesBalconyField(formData.propertyType);
+  const showAvailableForField = usesAvailableForField(formData.listingType);
+  const showGenderPreferenceField = usesGenderPreferenceField(formData.propertyType);
+  const showFoodIncludedField = usesFoodIncludedField(formData.propertyType);
+  const showAttachedBathroomField = usesAttachedBathroomField(formData.propertyType);
+  const showPlotFacingField = usesPlotFacingField(formData.propertyType);
+  const areaLabel = getAreaLabel(formData.propertyType);
+  const propertyTypeGuidance = getPropertyTypeGuidance(formData.propertyType);
 
   // Parse images from JSON string to array
   const imageUrls: string[] = (() => {
@@ -68,6 +107,22 @@ export function PropertyForm({
 
   const updateField = useCallback((field: keyof PropertyFormData, value: string) => {
     onFormDataChange({ ...formData, [field]: value });
+  }, [formData, onFormDataChange]);
+
+  const handlePropertyTypeChange = useCallback((value: string) => {
+    onFormDataChange({
+      ...formData,
+      propertyType: value,
+      bedrooms: normalizeBedroomValue(value, formData.bedrooms).toString(),
+      bathrooms: normalizeBathroomValue(value, formData.bathrooms).toString(),
+      parking: usesParkingField(value) ? formData.parking : "",
+      balcony: usesBalconyField(value) ? formData.balcony : "",
+      genderPreference: usesGenderPreferenceField(value) ? formData.genderPreference : "",
+      foodIncluded: usesFoodIncludedField(value) ? formData.foodIncluded : "",
+      attachedBathroom: usesAttachedBathroomField(value) ? formData.attachedBathroom : "",
+      plotFacing: usesPlotFacingField(value) ? formData.plotFacing : "",
+      furnishing: usesFurnishingField(value) ? formData.furnishing : "",
+    });
   }, [formData, onFormDataChange]);
 
   const handleImagesChange = useCallback((newImages: string[]) => {
@@ -164,8 +219,12 @@ export function PropertyForm({
           rows={3}
           value={formData.description}
           onChange={(e) => updateField('description', e.target.value)}
+          placeholder="Example: 3BHK apartment with balcony near metro station"
           required
         />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Write at least 10 characters so the listing is descriptive enough for renters and buyers.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -181,7 +240,7 @@ export function PropertyForm({
         </div>
         <div>
           <Label htmlFor="propertyType">Property Type *</Label>
-          <Select value={formData.propertyType} onValueChange={(v) => updateField('propertyType', v)}>
+          <Select value={formData.propertyType} onValueChange={handlePropertyTypeChange}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -201,6 +260,150 @@ export function PropertyForm({
           </Select>
         </div>
       </div>
+      <p className="text-xs text-muted-foreground">{propertyTypeGuidance}</p>
+
+      <div className="grid grid-cols-2 gap-4">
+        {showFurnishingField && (
+          <div>
+            <Label htmlFor="furnishing">Furnishing</Label>
+            <Select value={formData.furnishing || "na"} onValueChange={(v) => updateField("furnishing", v === "na" ? "" : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select furnishing" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="na">Not specified</SelectItem>
+                <SelectItem value="unfurnished">Unfurnished</SelectItem>
+                <SelectItem value="semi-furnished">Semi-Furnished</SelectItem>
+                <SelectItem value="fully-furnished">Fully Furnished</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {showAvailableForField && (
+          <div>
+            <Label htmlFor="availableFor">Suitable For</Label>
+            <Select value={formData.availableFor || "na"} onValueChange={(v) => updateField("availableFor", v === "na" ? "" : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select audience" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="na">Not specified</SelectItem>
+                <SelectItem value="any">Anyone</SelectItem>
+                <SelectItem value="family">Family</SelectItem>
+                <SelectItem value="bachelors">Bachelors</SelectItem>
+                <SelectItem value="students">Students</SelectItem>
+                <SelectItem value="working-professionals">Working Professionals</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+
+      {(showParkingField || showBalconyField || showGenderPreferenceField || showFoodIncludedField || showAttachedBathroomField || showPlotFacingField) && (
+        <div className="grid grid-cols-2 gap-4">
+          {showParkingField && (
+            <div>
+              <Label htmlFor="parking">Parking</Label>
+              <Select value={formData.parking || "na"} onValueChange={(v) => updateField("parking", v === "na" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select parking" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="na">Not specified</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="bike">Bike</SelectItem>
+                  <SelectItem value="car">Car</SelectItem>
+                  <SelectItem value="both">Both</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {showBalconyField && (
+            <div>
+              <Label htmlFor="balcony">Balcony</Label>
+              <Select value={formData.balcony || "na"} onValueChange={(v) => updateField("balcony", v === "na" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select balcony count" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="na">Not specified</SelectItem>
+                  <SelectItem value="0">No balcony</SelectItem>
+                  <SelectItem value="1">1 balcony</SelectItem>
+                  <SelectItem value="2">2 balconies</SelectItem>
+                  <SelectItem value="3+">3+ balconies</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {showGenderPreferenceField && (
+            <div>
+              <Label htmlFor="genderPreference">Gender Preference</Label>
+              <Select value={formData.genderPreference || "na"} onValueChange={(v) => updateField("genderPreference", v === "na" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select preference" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="na">Not specified</SelectItem>
+                  <SelectItem value="any">Any</SelectItem>
+                  <SelectItem value="male">Male</SelectItem>
+                  <SelectItem value="female">Female</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {showFoodIncludedField && (
+            <div>
+              <Label htmlFor="foodIncluded">Food Included</Label>
+              <Select value={formData.foodIncluded || "na"} onValueChange={(v) => updateField("foodIncluded", v === "na" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select option" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="na">Not specified</SelectItem>
+                  <SelectItem value="true">Yes</SelectItem>
+                  <SelectItem value="false">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {showAttachedBathroomField && (
+            <div>
+              <Label htmlFor="attachedBathroom">Attached Bathroom</Label>
+              <Select value={formData.attachedBathroom || "na"} onValueChange={(v) => updateField("attachedBathroom", v === "na" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select option" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="na">Not specified</SelectItem>
+                  <SelectItem value="true">Yes</SelectItem>
+                  <SelectItem value="false">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {showPlotFacingField && (
+            <div>
+              <Label htmlFor="plotFacing">Plot Facing</Label>
+              <Select value={formData.plotFacing || "na"} onValueChange={(v) => updateField("plotFacing", v === "na" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select facing" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="na">Not specified</SelectItem>
+                  <SelectItem value="north">North</SelectItem>
+                  <SelectItem value="south">South</SelectItem>
+                  <SelectItem value="east">East</SelectItem>
+                  <SelectItem value="west">West</SelectItem>
+                  <SelectItem value="north-east">North-East</SelectItem>
+                  <SelectItem value="north-west">North-West</SelectItem>
+                  <SelectItem value="south-east">South-East</SelectItem>
+                  <SelectItem value="south-west">South-West</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -260,6 +463,18 @@ export function PropertyForm({
               </SelectContent>
             </Select>
           </div>
+        </div>
+      )}
+      {mode === "admin" && formData.approvalStatus === "rejected" && (
+        <div>
+          <Label htmlFor="rejectionReason">Rejection Reason</Label>
+          <Textarea
+            id="rejectionReason"
+            rows={3}
+            value={formData.rejectionReason}
+            onChange={(e) => updateField("rejectionReason", e.target.value)}
+            placeholder="Explain why this listing was rejected so the owner can fix it."
+          />
         </div>
       )}
 
@@ -413,29 +628,33 @@ export function PropertyForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className={`grid gap-4 ${(showBedroomField || showBathroomField) ? "grid-cols-3" : "grid-cols-1"}`}>
+        {showBedroomField && (
+            <div>
+              <Label htmlFor="bedrooms">Bedrooms *</Label>
+              <Input
+                id="bedrooms"
+                type="number"
+                value={formData.bedrooms}
+                onChange={(e) => updateField('bedrooms', e.target.value)}
+                required={showBedroomField}
+              />
+            </div>
+        )}
+        {showBathroomField && (
+            <div>
+              <Label htmlFor="bathrooms">Bathrooms *</Label>
+              <Input
+                id="bathrooms"
+                type="number"
+                value={formData.bathrooms}
+                onChange={(e) => updateField('bathrooms', e.target.value)}
+                required={showBathroomField}
+              />
+            </div>
+        )}
         <div>
-          <Label htmlFor="bedrooms">Bedrooms *</Label>
-          <Input
-            id="bedrooms"
-            type="number"
-            value={formData.bedrooms}
-            onChange={(e) => updateField('bedrooms', e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="bathrooms">Bathrooms *</Label>
-          <Input
-            id="bathrooms"
-            type="number"
-            value={formData.bathrooms}
-            onChange={(e) => updateField('bathrooms', e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="squareFeet">Square Feet *</Label>
+          <Label htmlFor="squareFeet">{areaLabel} *</Label>
           <Input
             id="squareFeet"
             type="number"
@@ -445,6 +664,11 @@ export function PropertyForm({
           />
         </div>
       </div>
+      {(!showBedroomField || !showBathroomField) && (
+        <p className="text-xs text-muted-foreground">
+          Fields that do not apply to this property type are automatically skipped.
+        </p>
+      )}
 
       {/* Image Upload Section */}
       <div>
@@ -453,6 +677,20 @@ export function PropertyForm({
           images={imageUrls}
           onImagesChange={handleImagesChange}
         />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Add up to 4 images for the listing. The first uploaded image is used as the cover across cards and search results.
+        </p>
+      </div>
+
+      <div>
+        <Label>Short Property Video</Label>
+        <VideoUploader
+          videoUrl={formData.videoUrl}
+          onVideoChange={(url) => updateField("videoUrl", url)}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Optional. Add one short walkthrough video. Images appear in the gallery and cards, while the video shows on the property details page.
+        </p>
       </div>
 
       <div className="flex gap-2 justify-end pt-4 border-t">

@@ -11,6 +11,13 @@ import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { MapView } from "@/components/Map";
+import {
+  getAreaLabel,
+  getPropertyAdditionalDetails,
+  getPropertyStats,
+  usesBathroomCount,
+  usesBedroomCount,
+} from "@/lib/propertyDisplay";
 
 export default function PropertyDetail() {
   const params = useParams();
@@ -152,6 +159,9 @@ export default function PropertyDetail() {
   };
   
   const images = parseImages(property.images as string);
+  const videoUrl = typeof property.videoUrl === "string" ? property.videoUrl : "";
+  const propertyStats = getPropertyStats(property);
+  const additionalDetails = getPropertyAdditionalDetails(property);
   const hasOwnerContact = Boolean(property.ownerName || property.ownerPhone || property.ownerEmail);
   const ownerDisplayName = property.ownerName || "Property Owner";
   const ownerInitials = ownerDisplayName
@@ -252,6 +262,23 @@ export default function PropertyDetail() {
                     ))}
                   </div>
                 )}
+
+                {videoUrl && (
+                  <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="mb-3">
+                      <h3 className="text-base font-semibold text-foreground">Video Tour</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Watch a short walkthrough of this property.
+                      </p>
+                    </div>
+                    <video
+                      src={videoUrl}
+                      controls
+                      playsInline
+                      className="w-full rounded-xl bg-black max-h-[460px]"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Price & Quick Info */}
@@ -266,28 +293,22 @@ export default function PropertyDetail() {
                       <span className="px-4 py-2 bg-primary/10 text-primary rounded-lg text-sm font-medium capitalize">{property.status}</span>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
-                      <BedDouble className="w-6 h-6 text-primary" />
-                      <div>
-                        <div className="text-lg font-bold">{property.bedrooms}</div>
-                        <div className="text-xs text-muted-foreground">Bedrooms</div>
+                  <div className={`grid gap-4 ${propertyStats.length > 1 ? "grid-cols-3" : "grid-cols-1"}`}>
+                    {propertyStats.map((item) => (
+                      <div key={item.key} className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
+                        {item.key === "bedrooms" ? (
+                          <BedDouble className="w-6 h-6 text-primary" />
+                        ) : item.key === "bathrooms" ? (
+                          <Bath className="w-6 h-6 text-primary" />
+                        ) : (
+                          <Maximize className="w-6 h-6 text-primary" />
+                        )}
+                        <div>
+                          <div className="text-lg font-bold">{item.value}</div>
+                          <div className="text-xs text-muted-foreground">{item.label}</div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
-                      <Bath className="w-6 h-6 text-primary" />
-                      <div>
-                        <div className="text-lg font-bold">{property.bathrooms}</div>
-                        <div className="text-xs text-muted-foreground">Bathrooms</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
-                      <Maximize className="w-6 h-6 text-primary" />
-                      <div>
-                        <div className="text-lg font-bold">{property.squareFeet.toLocaleString()}</div>
-                        <div className="text-xs text-muted-foreground">Sq Ft</div>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -311,9 +332,20 @@ export default function PropertyDetail() {
                       { icon: MapPin, label: "City", value: property.city },
                       { icon: MapPin, label: "State", value: property.state },
                       ...(property.ownerName ? [{ icon: Building2, label: "Listed By", value: property.ownerName }] : []),
-                      { icon: BedDouble, label: "Bedrooms", value: property.bedrooms },
-                      { icon: Bath, label: "Bathrooms", value: property.bathrooms },
-                      { icon: Maximize, label: "Square Feet", value: property.squareFeet.toLocaleString() },
+                      ...(usesBedroomCount(property.propertyType)
+                        ? [
+                            { icon: BedDouble, label: "Bedrooms", value: property.bedrooms },
+                          ]
+                        : []),
+                      ...(usesBathroomCount(property.propertyType)
+                        ? [{ icon: Bath, label: "Bathrooms", value: property.bathrooms }]
+                        : []),
+                      { icon: Maximize, label: getAreaLabel(property.propertyType), value: property.squareFeet.toLocaleString() },
+                      ...additionalDetails.map((item) => ({
+                        icon: Building2,
+                        label: item.label,
+                        value: item.value,
+                      })),
                       { icon: Calendar, label: "Status", value: property.status },
                     ].map((item, i) => (
                       <div key={i} className="flex items-start gap-3">

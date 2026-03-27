@@ -1,12 +1,37 @@
 import { systemRouter } from "./_core/systemRouter.js";
 import { adminProcedure, publicProcedure, protectedProcedure, router } from "./_core/trpc.js";
+import { COOKIE_NAME } from "../shared/const.js";
+import { getSessionCookieOptions } from "./_core/cookies.js";
+import {
+  adminPropertyInputSchema,
+  propertyApprovalUpdateInputSchema,
+  adminPropertyUpdateInputSchema,
+  contactMessageCreateInputSchema,
+  contactMessageStatusUpdateInputSchema,
+  idInputSchema,
+  imageUploadInputSchema,
+  inquiryCreateInputSchema,
+  inquiryStatusUpdateInputSchema,
+  ownerMessageCreateInputSchema,
+  ownerPropertyInputSchema,
+  ownerPropertyUpdateInputSchema,
+  platformSettingsInputSchema,
+  propertyIdInputSchema,
+  propertySearchInputSchema,
+  videoUploadInputSchema,
+} from "./schemas.js";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
-    logout: publicProcedure.mutation(() => {
+    logout: publicProcedure.mutation(({ ctx }) => {
+      ctx.res.clearCookie(COOKIE_NAME, {
+        ...getSessionCookieOptions(ctx.req),
+        maxAge: -1,
+      });
+
       return {
         success: true,
       } as const;
@@ -36,12 +61,7 @@ export const appRouter = router({
     }),
     
     getById: publicProcedure
-      .input((val: unknown) => {
-        if (typeof val !== 'object' || val === null || !('id' in val)) {
-          throw new Error('Invalid input');
-        }
-        return val as { id: number };
-      })
+      .input(idInputSchema)
       .query(async ({ input, ctx }) => {
         const { getAdminPropertyById, getPropertyById } = await import("./db.js");
         const property = await getPropertyById(input.id);
@@ -53,14 +73,14 @@ export const appRouter = router({
       }),
     
     search: publicProcedure
-      .input((val: unknown) => val as any)
+      .input(propertySearchInputSchema)
       .query(async ({ input }) => {
         const { searchProperties } = await import("./db.js");
         return searchProperties(input);
       }),
 
     submitOwnerListing: protectedProcedure
-      .input((val: unknown) => val as any)
+      .input(ownerPropertyInputSchema)
       .mutation(async ({ input, ctx }) => {
         const { createOwnerListing } = await import("./db.js");
         const listing = await createOwnerListing({
@@ -81,16 +101,52 @@ export const appRouter = router({
         );
         return listing;
       }),
+
+    updateOwnerListing: protectedProcedure
+      .input(ownerPropertyUpdateInputSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { getOwnerProperties, updateProperty } = await import("./db.js");
+        const ownedProperties = await getOwnerProperties(ctx.user.id);
+        const existing = ownedProperties.find((property: any) => property.id === input.id);
+
+        if (!existing) {
+          throw new Error("Unauthorized");
+        }
+
+        const { id, ...data } = input;
+        const updated = await updateProperty(id, {
+          ...data,
+          createdBy: ctx.user.id,
+          approvalStatus: "pending",
+          rejectionReason: null,
+          featured: false,
+        });
+
+        const { sendAdminAlert } = await import("./_core/email.js");
+        await sendAdminAlert(
+          `Owner listing updated: ${updated.title}`,
+          [
+            `An owner updated a listing and it has been moved back to pending review.`,
+            `Title: ${updated.title}`,
+            `Owner: ${updated.ownerName || "Unknown"}`,
+            `Email: ${updated.ownerEmail || "Not provided"}`,
+            `Phone: ${updated.ownerPhone || "Not provided"}`,
+            `City: ${updated.city}, ${updated.state}`,
+          ].join("\n")
+        );
+
+        return updated;
+      }),
     
     create: adminProcedure
-      .input((val: unknown) => val as any)
+      .input(adminPropertyInputSchema)
       .mutation(async ({ input, ctx }) => {
         const { createProperty } = await import("./db.js");
         return createProperty({ ...input, createdBy: ctx.user.id });
       }),
     
     update: adminProcedure
-      .input((val: unknown) => val as any)
+      .input(adminPropertyUpdateInputSchema)
       .mutation(async ({ input }) => {
         const { getAdminPropertyById, updateProperty } = await import("./db.js");
         const before = await getAdminPropertyById(input.id);
@@ -111,6 +167,46 @@ export const appRouter = router({
               `Title: ${updated.title}`,
               `New status: ${updated.approvalStatus}`,
               `City: ${updated.city}, ${updated.state}`,
+              ...(updated.approvalStatus === "rejected" && updated.rejectionReason
+                ? [`Reason: ${updated.rejectionReason}`]
+                : []),
+            ].join("\n"),
+          });
+        }
+
+        return updated;
+      }),
+
+    updateApprovalStatus: adminProcedure
+      .input(propertyApprovalUpdateInputSchema)
+      .mutation(async ({ input }) => {
+        const { getAdminPropertyById, updateProperty } = await import("./db.js");
+        const before = await getAdminPropertyById(input.id);
+        if (!before) {
+          throw new Error(`Property ${input.id} not found`);
+        }
+
+        const updated = await updateProperty(input.id, {
+          approvalStatus: input.approvalStatus,
+          rejectionReason: input.approvalStatus === "rejected" ? input.rejectionReason ?? null : null,
+        });
+
+        if (
+          before.approvalStatus !== updated.approvalStatus &&
+          updated.ownerEmail
+        ) {
+          const { sendEmail } = await import("./_core/email.js");
+          await sendEmail({
+            to: [{ email: updated.ownerEmail, name: updated.ownerName || "Owner" }],
+            subject: `Listing ${updated.approvalStatus}: ${updated.title}`,
+            textContent: [
+              `Your listing status has been updated.`,
+              `Title: ${updated.title}`,
+              `New status: ${updated.approvalStatus}`,
+              `City: ${updated.city}, ${updated.state}`,
+              ...(updated.approvalStatus === "rejected" && updated.rejectionReason
+                ? [`Reason: ${updated.rejectionReason}`]
+                : []),
             ].join("\n"),
           });
         }
@@ -119,14 +215,23 @@ export const appRouter = router({
       }),
     
     delete: adminProcedure
-      .input((val: unknown) => {
-        if (typeof val !== 'object' || val === null || !('id' in val)) {
-          throw new Error('Invalid input');
-        }
-        return val as { id: number };
-      })
+      .input(idInputSchema)
       .mutation(async ({ input }) => {
         const { deleteProperty } = await import("./db.js");
+        return deleteProperty(input.id);
+      }),
+
+    deleteOwnerListing: protectedProcedure
+      .input(idInputSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { deleteProperty, getOwnerProperties } = await import("./db.js");
+        const ownedProperties = await getOwnerProperties(ctx.user.id);
+        const existing = ownedProperties.find((property: any) => property.id === input.id);
+
+        if (!existing) {
+          throw new Error("Unauthorized");
+        }
+
         return deleteProperty(input.id);
       }),
   }),
@@ -134,7 +239,7 @@ export const appRouter = router({
   // Image upload
   upload: router({
     image: protectedProcedure
-      .input((val: unknown) => val as { base64: string; filename: string; contentType: string })
+      .input(imageUploadInputSchema)
       .mutation(async ({ input }) => {
         const { uploadPropertyImage } = await import("./db.js");
         const { nanoid } = await import('nanoid');
@@ -145,12 +250,24 @@ export const appRouter = router({
         const { url } = await uploadPropertyImage(key, buffer, input.contentType);
         return { url };
       }),
+    video: protectedProcedure
+      .input(videoUploadInputSchema)
+      .mutation(async ({ input }) => {
+        const { uploadPropertyVideo } = await import("./db.js");
+        const { nanoid } = await import("nanoid");
+        const suffix = nanoid(8);
+        const ext = input.filename.split(".").pop() || "mp4";
+        const key = `property-videos/${Date.now()}-${suffix}.${ext}`;
+        const buffer = Buffer.from(input.base64, "base64");
+        const { url } = await uploadPropertyVideo(key, buffer, input.contentType);
+        return { url };
+      }),
   }),
 
   // Inquiry routes
   inquiries: router({
     create: publicProcedure
-      .input((val: unknown) => val as any)
+      .input(inquiryCreateInputSchema)
       .mutation(async ({ input }) => {
         const { createInquiry } = await import("./db.js");
         const { notifyOwner } = await import("./_core/notification.js");
@@ -190,29 +307,14 @@ export const appRouter = router({
       }),
     
     getByProperty: adminProcedure
-      .input((val: unknown) => {
-        if (typeof val !== 'object' || val === null || !('propertyId' in val)) {
-          throw new Error('Invalid input');
-        }
-        return val as { propertyId: number };
-      })
+      .input(propertyIdInputSchema)
       .query(async ({ input }) => {
         const { getInquiriesByProperty } = await import("./db.js");
         return getInquiriesByProperty(input.propertyId);
       }),
 
     updateStatus: adminProcedure
-      .input((val: unknown) => {
-        if (
-          typeof val !== "object" ||
-          val === null ||
-          !("id" in val) ||
-          !("status" in val)
-        ) {
-          throw new Error("Invalid input");
-        }
-        return val as { id: number; status: "new" | "contacted" | "closed" };
-      })
+      .input(inquiryStatusUpdateInputSchema)
       .mutation(async ({ input }) => {
         const { updateInquiryStatus } = await import("./db.js");
         return updateInquiryStatus(input.id, input.status);
@@ -226,12 +328,7 @@ export const appRouter = router({
     }),
 
     getByProperty: protectedProcedure
-      .input((val: unknown) => {
-        if (typeof val !== "object" || val === null || !("propertyId" in val)) {
-          throw new Error("Invalid input");
-        }
-        return val as { propertyId: number };
-      })
+      .input(propertyIdInputSchema)
       .query(async ({ input, ctx }) => {
         const { getOwnerProperties, getPropertyMessages } = await import("./db.js");
         if (ctx.user.role !== "admin") {
@@ -245,17 +342,7 @@ export const appRouter = router({
       }),
 
     create: protectedProcedure
-      .input((val: unknown) => {
-        if (
-          typeof val !== "object" ||
-          val === null ||
-          !("propertyId" in val) ||
-          !("content" in val)
-        ) {
-          throw new Error("Invalid input");
-        }
-        return val as { propertyId: number; content: string };
-      })
+      .input(ownerMessageCreateInputSchema)
       .mutation(async ({ input, ctx }) => {
         const { createOwnerMessage, getOwnerProperties } = await import("./db.js");
         if (ctx.user.role !== "admin") {
@@ -306,24 +393,7 @@ export const appRouter = router({
     }),
 
     update: adminProcedure
-      .input((val: unknown) => {
-        if (
-          typeof val !== "object" ||
-          val === null ||
-          !("teamName" in val) ||
-          !("tagline" in val) ||
-          !("contactPhone" in val) ||
-          !("contactEmail" in val)
-        ) {
-          throw new Error("Invalid input");
-        }
-        return val as {
-          teamName: string;
-          tagline: string;
-          contactPhone: string;
-          contactEmail: string;
-        };
-      })
+      .input(platformSettingsInputSchema)
       .mutation(async ({ input }) => {
         const { upsertPlatformSettings } = await import("./db.js");
         return upsertPlatformSettings(input);
@@ -332,24 +402,7 @@ export const appRouter = router({
 
   contactMessages: router({
     create: publicProcedure
-      .input((val: unknown) => {
-        if (
-          typeof val !== "object" ||
-          val === null ||
-          !("name" in val) ||
-          !("email" in val) ||
-          !("message" in val)
-        ) {
-          throw new Error("Invalid input");
-        }
-        return val as {
-          name: string;
-          email: string;
-          phone?: string;
-          subject?: string;
-          message: string;
-        };
-      })
+      .input(contactMessageCreateInputSchema)
       .mutation(async ({ input }) => {
         const { createContactMessage } = await import("./db.js");
         const message = await createContactMessage(input);
@@ -373,17 +426,7 @@ export const appRouter = router({
     }),
 
     updateStatus: adminProcedure
-      .input((val: unknown) => {
-        if (
-          typeof val !== "object" ||
-          val === null ||
-          !("id" in val) ||
-          !("status" in val)
-        ) {
-          throw new Error("Invalid input");
-        }
-        return val as { id: number; status: "new" | "reviewed" | "closed" };
-      })
+      .input(contactMessageStatusUpdateInputSchema)
       .mutation(async ({ input }) => {
         const { updateContactMessageStatus } = await import("./db.js");
         return updateContactMessageStatus(input.id, input.status);

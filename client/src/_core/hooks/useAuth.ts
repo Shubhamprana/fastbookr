@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { account } from "@/lib/appwrite";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useEffect, useMemo, useState } from "react";
@@ -15,24 +15,31 @@ export function useAuth(options?: UseAuthOptions) {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().finally(() => {
-      if (mounted) {
-        setSessionReady(true);
+    const syncSession = async () => {
+      try {
+        await account.get();
+      } catch {
+        // `account.get()` throws when the user is not signed in.
+      } finally {
+        if (mounted) {
+          setSessionReady(true);
+        }
       }
-    });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      void utils.auth.me.invalidate();
-      if (mounted) {
-        setSessionReady(true);
-      }
-    });
+      await utils.auth.me.invalidate();
+    };
+
+    void syncSession();
+
+    const onFocus = () => {
+      void syncSession();
+    };
+
+    window.addEventListener("focus", onFocus);
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      window.removeEventListener("focus", onFocus);
     };
   }, [utils.auth.me]);
 
@@ -64,7 +71,7 @@ export function useAuth(options?: UseAuthOptions) {
 
   const logout = async () => {
     try {
-      await supabase.auth.signOut();
+      await account.deleteSession("current");
     } catch (error: unknown) {
       if (
         error instanceof TRPCClientError &&

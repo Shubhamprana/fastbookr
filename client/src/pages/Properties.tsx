@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { getPropertyStats } from "@/lib/propertyDisplay";
 import {
   Search, BedDouble, Bath, Maximize, MapPin, Heart, X, Grid3X3, List
 } from "lucide-react";
@@ -191,6 +192,7 @@ export default function Properties() {
               {properties?.map((property: any) => {
                 const images = parseImages(property.images);
                 const mainImage = images[0] || "https://placehold.co/600x400/e2e8f0/94a3b8?text=Property";
+                const stats = getPropertyStats(property);
                 return (
                   <Link key={property.id} href={`/properties/${property.id}`}>
                     <Card className="group overflow-hidden border border-gray-100 hover:shadow-xl transition-all duration-300 cursor-pointer">
@@ -211,10 +213,20 @@ export default function Properties() {
                           <span className="truncate">{property.city}, {property.state}</span>
                         </div>
                         <h3 className="font-semibold text-foreground mb-3 truncate group-hover:text-primary transition-colors">{property.title}</h3>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
-                          <span className="flex items-center gap-1"><BedDouble className="w-4 h-4" /> {property.bedrooms}</span>
-                          <span className="flex items-center gap-1"><Bath className="w-4 h-4" /> {property.bathrooms}</span>
-                          <span className="flex items-center gap-1"><Maximize className="w-4 h-4" /> {property.squareFeet?.toLocaleString()}</span>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4 flex-wrap">
+                          {stats.map((item) => (
+                            <span key={item.key} className="flex items-center gap-1">
+                              {item.key === "bedrooms" ? (
+                                <BedDouble className="w-4 h-4" />
+                              ) : item.key === "bathrooms" ? (
+                                <Bath className="w-4 h-4" />
+                              ) : (
+                                <Maximize className="w-4 h-4" />
+                              )}{" "}
+                              {item.value}
+                              {item.key !== "squareFeet" ? "" : ` ${item.shortLabel}`}
+                            </span>
+                          ))}
                         </div>
                         <div className="pt-3 border-t border-gray-100">
                           <span className="text-lg font-bold text-primary">{formatPrice(property.price)}</span>
@@ -231,6 +243,7 @@ export default function Properties() {
               {properties?.map((property: any) => {
                 const images = parseImages(property.images);
                 const mainImage = images[0] || "https://placehold.co/600x400/e2e8f0/94a3b8?text=Property";
+                const stats = getPropertyStats(property);
                 return (
                   <Link key={property.id} href={`/properties/${property.id}`}>
                     <Card className="group overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300 cursor-pointer">
@@ -251,10 +264,19 @@ export default function Properties() {
                             <p className="text-sm text-muted-foreground line-clamp-2 mb-4">{property.description}</p>
                           </div>
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-5 text-sm text-muted-foreground">
-                              <span className="flex items-center gap-1"><BedDouble className="w-4 h-4" /> {property.bedrooms} Beds</span>
-                              <span className="flex items-center gap-1"><Bath className="w-4 h-4" /> {property.bathrooms} Baths</span>
-                              <span className="flex items-center gap-1"><Maximize className="w-4 h-4" /> {property.squareFeet?.toLocaleString()} sqft</span>
+                            <div className="flex items-center gap-5 text-sm text-muted-foreground flex-wrap">
+                              {stats.map((item) => (
+                                <span key={item.key} className="flex items-center gap-1">
+                                  {item.key === "bedrooms" ? (
+                                    <BedDouble className="w-4 h-4" />
+                                  ) : item.key === "bathrooms" ? (
+                                    <Bath className="w-4 h-4" />
+                                  ) : (
+                                    <Maximize className="w-4 h-4" />
+                                  )}{" "}
+                                  {item.value} {item.shortLabel}
+                                </span>
+                              ))}
                             </div>
                             <span className="text-xl font-bold text-primary">{formatPrice(property.price)}</span>
                           </div>

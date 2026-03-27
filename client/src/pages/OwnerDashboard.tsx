@@ -2,14 +2,90 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { PropertyForm } from "@/components/PropertyForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatAppErrorMessage } from "@/lib/errors";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Link, useLocation } from "wouter";
+import {
+  asAvailableFor,
+  asBalcony,
+  asFurnishing,
+  asGenderPreference,
+  asListingType,
+  asParking,
+  asPlotFacing,
+  asPropertyType,
+  normalizeBathroomValue,
+  normalizeBedroomValue,
+} from "@/lib/propertyDisplay";
+
+const emptyForm = {
+  title: "",
+  description: "",
+  price: "",
+  location: "",
+  city: "",
+  state: "",
+  zipCode: "",
+  propertyType: "house",
+  listingType: "rent",
+  bedrooms: "",
+  bathrooms: "",
+  squareFeet: "",
+  images: "[]",
+  videoUrl: "",
+  furnishing: "",
+  parking: "",
+  balcony: "",
+  availableFor: "",
+  genderPreference: "",
+  foodIncluded: "",
+  attachedBathroom: "",
+  plotFacing: "",
+  rejectionReason: "",
+  featured: "0",
+  approvalStatus: "pending",
+  feeStatus: "open",
+  ownerName: "",
+  ownerEmail: "",
+  ownerPhone: "",
+  latitude: "",
+  longitude: "",
+};
+
+function normalizeImages(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+  }
+
+  if (typeof value !== "string" || !value.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+    }
+    if (typeof parsed === "string" && parsed.trim()) {
+      return [parsed];
+    }
+  } catch {
+    return value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
 
 export default function OwnerDashboard() {
   const { isAuthenticated, loading } = useAuth();
@@ -22,6 +98,9 @@ export default function OwnerDashboard() {
   });
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
+  const [editingProperty, setEditingProperty] = useState<any>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [formData, setFormData] = useState(emptyForm);
   const utils = trpc.useUtils();
 
   const propertyId = selectedPropertyId ?? listings?.[0]?.id ?? null;
@@ -39,18 +118,144 @@ export default function OwnerDashboard() {
         utils.ownerMessages.getByProperty.invalidate({ propertyId });
       }
     },
-    onError: error => {
+    onError: (error) => {
       toast.error(error.message);
+    },
+  });
+
+  const updateListing = trpc.properties.updateOwnerListing.useMutation({
+    onSuccess: () => {
+      toast.success("Listing updated and sent back for review.");
+      setEditingProperty(null);
+      setIsEditDialogOpen(false);
+      setFormData(emptyForm);
+      utils.properties.getMine.invalidate();
+      utils.properties.getAll.invalidate();
+      utils.properties.getAdminAll.invalidate();
+    },
+    onError: (error) => {
+      toast.error(formatAppErrorMessage(error, "Failed to update your listing."));
+    },
+  });
+
+  const deleteListing = trpc.properties.deleteOwnerListing.useMutation({
+    onSuccess: () => {
+      toast.success("Listing deleted.");
+      utils.properties.getMine.invalidate();
+      utils.properties.getAll.invalidate();
+      utils.properties.getAdminAll.invalidate();
+    },
+    onError: (error) => {
+      toast.error(formatAppErrorMessage(error, "Failed to delete your listing."));
     },
   });
 
   const groupedMessages = useMemo(() => {
     const map = new Map<number, number>();
-    (allMessages ?? []).forEach(item => {
+    (allMessages ?? []).forEach((item) => {
       map.set(item.propertyId, (map.get(item.propertyId) ?? 0) + 1);
     });
     return map;
   }, [allMessages]);
+
+  const handleEdit = (listing: any) => {
+    setEditingProperty(listing);
+    setFormData({
+      title: listing.title,
+      description: listing.description,
+      price: (listing.price / 100).toString(),
+      location: listing.location,
+      city: listing.city,
+      state: listing.state,
+      zipCode: listing.zipCode || "",
+      propertyType: listing.propertyType,
+      listingType: listing.listingType,
+      bedrooms: String(listing.bedrooms ?? ""),
+      bathrooms: String(listing.bathrooms ?? ""),
+      squareFeet: String(listing.squareFeet ?? ""),
+      images: JSON.stringify(normalizeImages(listing.images)),
+      videoUrl: listing.videoUrl || "",
+      furnishing: listing.furnishing || "",
+      parking: listing.parking || "",
+      balcony: listing.balcony || "",
+      availableFor: listing.availableFor || "",
+      genderPreference: listing.genderPreference || "",
+      foodIncluded:
+        typeof listing.foodIncluded === "boolean" ? String(listing.foodIncluded) : "",
+      attachedBathroom:
+        typeof listing.attachedBathroom === "boolean" ? String(listing.attachedBathroom) : "",
+      plotFacing: listing.plotFacing || "",
+      rejectionReason: listing.rejectionReason || "",
+      featured: "0",
+      approvalStatus: "pending",
+      feeStatus: listing.feeStatus || "open",
+      ownerName: listing.ownerName || "",
+      ownerEmail: listing.ownerEmail || "",
+      ownerPhone: listing.ownerPhone || "",
+      latitude: listing.latitude?.toString() || "",
+      longitude: listing.longitude?.toString() || "",
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDelete = (listingId: number) => {
+    if (!window.confirm("Delete this listing permanently? This will also remove its uploaded media.")) {
+      return;
+    }
+
+    deleteListing.mutate({ id: listingId });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editingProperty) {
+      return;
+    }
+
+    try {
+      const images = JSON.parse(formData.images);
+      const propertyType = asPropertyType(formData.propertyType);
+      const listingType = asListingType(formData.listingType);
+
+      updateListing.mutate({
+        id: editingProperty.id,
+        title: formData.title,
+        description: formData.description,
+        price: Math.round(parseFloat(formData.price) * 100),
+        location: formData.location,
+        city: formData.city,
+        state: formData.state,
+        zipCode: formData.zipCode || null,
+        propertyType,
+        listingType,
+        bedrooms: Number(normalizeBedroomValue(propertyType, parseInt(formData.bedrooms || "0", 10))),
+        bathrooms: Number(normalizeBathroomValue(propertyType, parseInt(formData.bathrooms || "0", 10))),
+        squareFeet: parseInt(formData.squareFeet, 10),
+        images,
+        videoUrl: formData.videoUrl || null,
+        furnishing: asFurnishing(formData.furnishing),
+        parking: asParking(formData.parking),
+        balcony: asBalcony(formData.balcony),
+        availableFor: asAvailableFor(formData.availableFor),
+        genderPreference: asGenderPreference(formData.genderPreference),
+        foodIncluded: formData.foodIncluded ? formData.foodIncluded === "true" : null,
+        attachedBathroom: formData.attachedBathroom ? formData.attachedBathroom === "true" : null,
+        plotFacing: asPlotFacing(formData.plotFacing),
+        rejectionReason: null,
+        featured: false,
+        approvalStatus: "pending",
+        feeStatus: "open",
+        ownerName: formData.ownerName,
+        ownerEmail: formData.ownerEmail,
+        ownerPhone: formData.ownerPhone,
+        latitude: formData.latitude ? parseFloat(formData.latitude) : null,
+        longitude: formData.longitude ? parseFloat(formData.longitude) : null,
+      });
+    } catch {
+      toast.error("Please check your images and numeric fields.");
+    }
+  };
 
   if (loading) {
     return <div className="min-h-screen bg-background" />;
@@ -82,7 +287,7 @@ export default function OwnerDashboard() {
         <div className="container">
           <h1 className="text-3xl font-bold">Owner Dashboard</h1>
           <p className="mt-2 text-sm text-gray-300">
-            Track your listings, see approval status, and receive messages from admin.
+            Track your listings, edit or delete your own properties, and respond to admin messages.
           </p>
         </div>
       </section>
@@ -108,7 +313,7 @@ export default function OwnerDashboard() {
                       key={listing.id}
                       className="rounded-lg border p-4"
                     >
-                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div>
                           <div className="font-semibold">{listing.title}</div>
                           <div className="text-sm text-muted-foreground">
@@ -127,6 +332,26 @@ export default function OwnerDashboard() {
                           </Badge>
                         </div>
                       </div>
+                      {listing.approvalStatus === "rejected" && listing.rejectionReason && (
+                        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                          <span className="font-medium">Rejection reason:</span> {listing.rejectionReason}
+                        </div>
+                      )}
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Button variant="outline" onClick={() => handleEdit(listing)}>
+                          Edit Listing
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={() => handleDelete(listing.id)}
+                          disabled={deleteListing.isPending}
+                        >
+                          Delete Listing
+                        </Button>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Editing a listing sends it back to pending review so changes can be checked before republishing.
+                      </p>
                     </div>
                   ))
                 ) : (
@@ -199,7 +424,7 @@ export default function OwnerDashboard() {
 
                   <Textarea
                     value={message}
-                    onChange={e => setMessage(e.target.value)}
+                    onChange={(e) => setMessage(e.target.value)}
                     placeholder="Send a message to admin about this listing..."
                     rows={4}
                   />
@@ -221,6 +446,27 @@ export default function OwnerDashboard() {
           </TabsContent>
         </Tabs>
       </section>
+
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Edit Listing</DialogTitle>
+          </DialogHeader>
+          <PropertyForm
+            formData={formData}
+            onFormDataChange={setFormData}
+            onSubmit={handleSubmit}
+            onCancel={() => {
+              setIsEditDialogOpen(false);
+              setEditingProperty(null);
+              setFormData(emptyForm);
+            }}
+            isEditing={Boolean(editingProperty)}
+            isSubmitting={updateListing.isPending}
+            mode="owner"
+          />
+        </DialogContent>
+      </Dialog>
       <Footer />
     </div>
   );

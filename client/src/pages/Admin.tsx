@@ -11,9 +11,23 @@ import { Input } from "@/components/ui/input";
 import { Plus, Edit, Trash2, Eye, Check, X } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { PropertyForm } from "@/components/PropertyForm";
+import { formatAppErrorMessage } from "@/lib/errors";
 import { trpc } from "@/lib/trpc";
 import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
+import {
+  asAvailableFor,
+  asBalcony,
+  asFurnishing,
+  asGenderPreference,
+  asListingType,
+  asParking,
+  asPlotFacing,
+  asPropertyType,
+  getPropertyStats,
+  normalizeBathroomValue,
+  normalizeBedroomValue,
+} from "@/lib/propertyDisplay";
 
 export default function Admin() {
   const { user, isAuthenticated } = useAuth();
@@ -43,6 +57,16 @@ export default function Admin() {
     bathrooms: "",
     squareFeet: "",
     images: "",
+    videoUrl: "",
+    furnishing: "",
+    parking: "",
+    balcony: "",
+    availableFor: "",
+    genderPreference: "",
+    foodIncluded: "",
+    attachedBathroom: "",
+    plotFacing: "",
+    rejectionReason: "",
     featured: "0",
     approvalStatus: "approved",
     feeStatus: "open",
@@ -73,7 +97,7 @@ export default function Admin() {
       resetForm();
     },
     onError: (error) => {
-      toast.error("Failed to create property: " + error.message);
+      toast.error(formatAppErrorMessage(error, "Failed to create property."));
     },
   });
 
@@ -86,18 +110,18 @@ export default function Admin() {
       resetForm();
     },
     onError: (error) => {
-      toast.error("Failed to update property: " + error.message);
+      toast.error(formatAppErrorMessage(error, "Failed to update property."));
     },
   });
 
-  const updateApproval = trpc.properties.update.useMutation({
+  const updateApproval = trpc.properties.updateApprovalStatus.useMutation({
     onSuccess: () => {
       toast.success("Listing status updated");
       utils.properties.getAll.invalidate();
       utils.properties.getAdminAll.invalidate();
     },
     onError: (error) => {
-      toast.error("Failed to update listing status: " + error.message);
+      toast.error(formatAppErrorMessage(error, "Failed to update listing status."));
     },
   });
 
@@ -178,6 +202,16 @@ export default function Admin() {
       bathrooms: "",
       squareFeet: "",
       images: "",
+      videoUrl: "",
+      furnishing: "",
+      parking: "",
+      balcony: "",
+      availableFor: "",
+      genderPreference: "",
+      foodIncluded: "",
+      attachedBathroom: "",
+      plotFacing: "",
+      rejectionReason: "",
       featured: "0",
       approvalStatus: "approved",
       feeStatus: "open",
@@ -205,6 +239,18 @@ export default function Admin() {
       bathrooms: property.bathrooms.toString(),
       squareFeet: property.squareFeet.toString(),
       images: typeof property.images === "string" ? property.images : JSON.stringify(property.images),
+      videoUrl: property.videoUrl || "",
+      furnishing: property.furnishing || "",
+      parking: property.parking || "",
+      balcony: property.balcony || "",
+      availableFor: property.availableFor || "",
+      genderPreference: property.genderPreference || "",
+      foodIncluded:
+        typeof property.foodIncluded === "boolean" ? String(property.foodIncluded) : "",
+      attachedBathroom:
+        typeof property.attachedBathroom === "boolean" ? String(property.attachedBathroom) : "",
+      plotFacing: property.plotFacing || "",
+      rejectionReason: property.rejectionReason || "",
       featured: property.featured ? "1" : "0",
       approvalStatus: property.approvalStatus || "pending",
       feeStatus: property.feeStatus || "open",
@@ -221,6 +267,10 @@ export default function Admin() {
     
     try {
       const images = JSON.parse(formData.images);
+      const propertyType = asPropertyType(formData.propertyType);
+      const listingType = asListingType(formData.listingType);
+      const approvalStatus = formData.approvalStatus as "pending" | "approved" | "rejected";
+      const feeStatus = formData.feeStatus as "open" | "won" | "paid";
       
       const propertyData = {
         title: formData.title,
@@ -230,15 +280,25 @@ export default function Admin() {
         city: formData.city,
         state: formData.state,
         zipCode: formData.zipCode || null,
-        propertyType: formData.propertyType,
-        listingType: formData.listingType,
-        bedrooms: parseInt(formData.bedrooms),
-        bathrooms: parseInt(formData.bathrooms),
+        propertyType,
+        listingType,
+        bedrooms: Number(normalizeBedroomValue(propertyType, parseInt(formData.bedrooms || "0", 10))),
+        bathrooms: Number(normalizeBathroomValue(propertyType, parseInt(formData.bathrooms || "0", 10))),
         squareFeet: parseInt(formData.squareFeet),
         images,
+        videoUrl: formData.videoUrl || null,
+        furnishing: asFurnishing(formData.furnishing),
+        parking: asParking(formData.parking),
+        balcony: asBalcony(formData.balcony),
+        availableFor: asAvailableFor(formData.availableFor),
+        genderPreference: asGenderPreference(formData.genderPreference),
+        foodIncluded: formData.foodIncluded ? formData.foodIncluded === "true" : null,
+        attachedBathroom: formData.attachedBathroom ? formData.attachedBathroom === "true" : null,
+        plotFacing: asPlotFacing(formData.plotFacing),
+        rejectionReason: formData.approvalStatus === "rejected" ? formData.rejectionReason || null : null,
         featured: formData.featured === "1",
-        approvalStatus: formData.approvalStatus,
-        feeStatus: formData.feeStatus,
+        approvalStatus,
+        feeStatus,
         ownerName: formData.ownerName,
         ownerEmail: formData.ownerEmail,
         ownerPhone: formData.ownerPhone,
@@ -263,30 +323,20 @@ export default function Admin() {
   };
 
   const handleApprovalChange = (property: any, approvalStatus: "approved" | "rejected") => {
+    const rejectionReason =
+      approvalStatus === "rejected"
+        ? window.prompt("Why is this listing being rejected? This will be shown to the owner.", property.rejectionReason || "")
+        : null;
+
+    if (approvalStatus === "rejected" && !rejectionReason?.trim()) {
+      toast.error("Rejection reason is required.");
+      return;
+    }
+
     updateApproval.mutate({
       id: property.id,
-      title: property.title,
-      description: property.description,
-      price: property.price,
-      location: property.location,
-      city: property.city,
-      state: property.state,
-      zipCode: property.zipCode,
-      propertyType: property.propertyType,
-      listingType: property.listingType,
-      bedrooms: property.bedrooms,
-      bathrooms: property.bathrooms,
-      squareFeet: property.squareFeet,
-      images: property.images,
-      featured: property.featured,
-      status: property.status,
+      rejectionReason: approvalStatus === "rejected" ? rejectionReason : null,
       approvalStatus,
-      feeStatus: property.feeStatus,
-      ownerName: property.ownerName,
-      ownerEmail: property.ownerEmail,
-      ownerPhone: property.ownerPhone,
-      latitude: property.latitude,
-      longitude: property.longitude,
     });
   };
 
@@ -425,7 +475,12 @@ export default function Admin() {
                             <TableCell className="capitalize">{property.propertyType}</TableCell>
                             <TableCell>{formatPrice(property.price)}</TableCell>
                             <TableCell>{property.city}, {property.state}</TableCell>
-                            <TableCell>{property.bedrooms} / {property.bathrooms}</TableCell>
+                            <TableCell>
+                              {getPropertyStats(property)
+                                .filter((item) => item.key !== "squareFeet")
+                                .map((item) => `${item.value} ${item.shortLabel}`)
+                                .join(" • ") || "-"}
+                            </TableCell>
                             <TableCell className="capitalize">{property.approvalStatus}</TableCell>
                             <TableCell className="capitalize">{property.feeStatus}</TableCell>
                             <TableCell>{property.featured ? "Yes" : "No"}</TableCell>
