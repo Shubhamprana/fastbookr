@@ -18,6 +18,8 @@ import {
   asParking,
   asPlotFacing,
   asPropertyType,
+  deriveAreaNumericValue,
+  normalizeAreaText,
   normalizeBathroomValue,
   normalizeBedroomValue,
 } from "@/lib/propertyDisplay";
@@ -105,7 +107,8 @@ export default function SubmitListing() {
         listingType,
         bedrooms: Number(normalizeBedroomValue(propertyType, parseInt(prefilled.bedrooms || "0", 10))),
         bathrooms: Number(normalizeBathroomValue(propertyType, parseInt(prefilled.bathrooms || "0", 10))),
-        squareFeet: parseInt(prefilled.squareFeet, 10),
+        squareFeet: deriveAreaNumericValue(prefilled.squareFeet),
+        areaText: normalizeAreaText(prefilled.squareFeet),
         images,
         videoUrl: prefilled.videoUrl || null,
         furnishing: asFurnishing(prefilled.furnishing),

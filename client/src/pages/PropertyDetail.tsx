@@ -12,6 +12,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { MapView } from "@/components/Map";
 import {
+  formatAreaValue,
   getAreaLabel,
   getPropertyAdditionalDetails,
   getPropertyStats,
@@ -340,7 +341,7 @@ export default function PropertyDetail() {
                       ...(usesBathroomCount(property.propertyType)
                         ? [{ icon: Bath, label: "Bathrooms", value: property.bathrooms }]
                         : []),
-                      { icon: Maximize, label: getAreaLabel(property.propertyType), value: property.squareFeet.toLocaleString() },
+                      { icon: Maximize, label: getAreaLabel(property.propertyType), value: formatAreaValue(property) },
                       ...additionalDetails.map((item) => ({
                         icon: Building2,
                         label: item.label,

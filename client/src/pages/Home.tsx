@@ -248,7 +248,9 @@ export default function Home() {
                   <SelectItem value="independent-floor">Independent Floor</SelectItem>
                   <SelectItem value="condo">Condo</SelectItem>
                   <SelectItem value="villa">Villa</SelectItem>
+                  <SelectItem value="showroom">Showroom</SelectItem>
                   <SelectItem value="townhouse">Townhouse</SelectItem>
+                  <SelectItem value="land">Land</SelectItem>
                 </SelectContent>
               </Select>
 

@@ -250,6 +250,7 @@ export function PropertyForm({
               <SelectItem value="condo">Condo</SelectItem>
               <SelectItem value="townhouse">Townhouse</SelectItem>
               <SelectItem value="villa">Villa</SelectItem>
+              <SelectItem value="showroom">Showroom</SelectItem>
               <SelectItem value="land">Land</SelectItem>
               <SelectItem value="room">Room</SelectItem>
               <SelectItem value="studio">Studio</SelectItem>
@@ -657,9 +658,10 @@ export function PropertyForm({
           <Label htmlFor="squareFeet">{areaLabel} *</Label>
           <Input
             id="squareFeet"
-            type="number"
+            type="text"
             value={formData.squareFeet}
             onChange={(e) => updateField('squareFeet', e.target.value)}
+            placeholder="Examples: 1200 sq ft, 2 bigha, 300*200"
             required
           />
         </div>
@@ -669,6 +671,9 @@ export function PropertyForm({
           Fields that do not apply to this property type are automatically skipped.
         </p>
       )}
+      <p className="text-xs text-muted-foreground">
+        You can enter area in your preferred format, like `1200 sq ft`, `2 bigha`, or `300*200`.
+      </p>
 
       {/* Image Upload Section */}
       <div>

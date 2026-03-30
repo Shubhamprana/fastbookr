@@ -6,6 +6,7 @@ const propertyTypeValues = [
   "condo",
   "townhouse",
   "villa",
+  "showroom",
   "land",
   "room",
   "studio",
@@ -36,6 +37,7 @@ const plotFacingValues = [
 
 const propertyTypesWithoutBedrooms = new Set([
   "land",
+  "showroom",
   "room",
   "shared-room",
   "studio",
@@ -87,6 +89,7 @@ const basePropertySchema = z
     bedrooms: z.number().int().nonnegative(),
     bathrooms: z.number().int().nonnegative(),
     squareFeet: z.number().int().positive(),
+    areaText: z.string().trim().min(1).max(100).nullable().optional(),
     images: z.array(z.string().url()).min(1).max(4),
     videoUrl: z.string().url().nullable().optional(),
     furnishing: z.enum(furnishingValues).nullable().optional(),

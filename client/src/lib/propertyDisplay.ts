@@ -4,6 +4,7 @@ export const propertyTypeValues = [
   "condo",
   "townhouse",
   "villa",
+  "showroom",
   "land",
   "room",
   "studio",
@@ -50,6 +51,7 @@ type PropertyWithCoreFields = {
   bedrooms?: number | string | null;
   bathrooms?: number | string | null;
   squareFeet?: number | string | null;
+  areaText?: string | null;
   furnishing?: string | null;
   parking?: string | null;
   balcony?: string | null;
@@ -63,6 +65,7 @@ type PropertyWithCoreFields = {
 
 const PROPERTY_TYPES_WITHOUT_BEDROOMS = new Set<PropertyType>([
   "land",
+  "showroom",
   "room",
   "shared-room",
   "studio",
@@ -151,6 +154,8 @@ export function getPropertyTypeGuidance(propertyType?: string | null) {
   switch (propertyType) {
     case "land":
       return "Land listings only need plot area and location details.";
+    case "showroom":
+      return "Showroom listings focus on bathrooms and built-up area. Bedroom count is skipped.";
     case "room":
       return "Room listings focus on bathroom count and carpet area. Bedroom count is skipped.";
     case "shared-room":
@@ -169,7 +174,7 @@ export function usesFurnishingField(propertyType?: string | null) {
 }
 
 export function usesParkingField(propertyType?: string | null) {
-  return ["house", "apartment", "condo", "townhouse", "villa", "independent-floor"].includes(
+  return ["house", "apartment", "condo", "townhouse", "villa", "showroom", "independent-floor"].includes(
     propertyType ?? ""
   );
 }
@@ -208,6 +213,46 @@ export function normalizeBathroomValue(propertyType: string | null | undefined, 
   return usesBathroomCount(propertyType) ? value : 0;
 }
 
+export function normalizeAreaText(value: string | number | null | undefined) {
+  const text = String(value ?? "").trim();
+  return text.length > 0 ? text : null;
+}
+
+export function deriveAreaNumericValue(value: string | number | null | undefined) {
+  const text = String(value ?? "").trim().replace(/,/g, "");
+  if (!text) return 0;
+
+  const multiplied = text.match(/^(\d+(?:\.\d+)?)\s*(?:x|\*)\s*(\d+(?:\.\d+)?)$/i);
+  if (multiplied) {
+    return Math.max(1, Math.round(parseFloat(multiplied[1]) * parseFloat(multiplied[2])));
+  }
+
+  const direct = text.match(/^\d+(?:\.\d+)?$/);
+  if (direct) {
+    return Math.max(1, Math.round(parseFloat(text)));
+  }
+
+  const firstNumber = text.match(/(\d+(?:\.\d+)?)/);
+  if (firstNumber) {
+    return Math.max(1, Math.round(parseFloat(firstNumber[1])));
+  }
+
+  return 0;
+}
+
+export function formatAreaValue(property: PropertyWithCoreFields) {
+  if (property.areaText && property.areaText.trim().length > 0) {
+    return property.areaText;
+  }
+
+  const numericValue = Number(property.squareFeet ?? 0);
+  if (Number.isFinite(numericValue) && numericValue > 0) {
+    return numericValue.toLocaleString();
+  }
+
+  return "";
+}
+
 export function getPropertyStats(property: PropertyWithCoreFields) {
   const stats: Array<{
     key: "bedrooms" | "bathrooms" | "squareFeet";
@@ -236,7 +281,7 @@ export function getPropertyStats(property: PropertyWithCoreFields) {
 
   stats.push({
     key: "squareFeet",
-    value: Number(property.squareFeet ?? 0).toLocaleString(),
+    value: formatAreaValue(property),
     label: getAreaLabel(property.propertyType),
     shortLabel: getAreaShortLabel(property.propertyType),
   });

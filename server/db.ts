@@ -70,6 +70,7 @@ export type PropertyRecord = {
   bedrooms: number;
   bathrooms: number;
   squareFeet: number;
+  areaText: string | null;
   images: string;
   videoUrl: string | null;
   furnishing: string | null;
@@ -419,6 +420,7 @@ function mapProperty(doc: PropertyDocument): PropertyRecord {
     bedrooms: Number(doc.bedrooms),
     bathrooms: Number(doc.bathrooms),
     squareFeet: Number(doc.squareFeet),
+    areaText: extra.areaText ?? null,
     images: normalizedImages,
     videoUrl: extra.videoUrl ?? null,
     furnishing: extra.furnishing ?? null,
@@ -571,6 +573,7 @@ function normalizePropertyPayload(property: Record<string, any>) {
       latitude: property.latitude ?? null,
       longitude: property.longitude ?? null,
       videoUrl: property.videoUrl ?? null,
+      areaText: property.areaText ?? null,
       ...extraDetails,
     }),
   };
