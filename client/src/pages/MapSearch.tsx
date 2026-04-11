@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PropertyCoverMedia } from "@/components/PropertyCoverMedia";
 import { MapPin, Bed, Bath, Maximize, X, Search, Navigation, List, Map as MapIcon } from "lucide-react";
 import { Link } from "wouter";
 import { PlacesAutocomplete } from "@/components/PlacesAutocomplete";
@@ -37,18 +38,6 @@ export default function MapSearch() {
       minimumFractionDigits: 0,
     });
   };
-
-  const parseImages = (images: string) => {
-    try {
-      const parsed = JSON.parse(images);
-      return Array.isArray(parsed) ? parsed : [parsed];
-    } catch {
-      return images ? images.split(",").map(url => url.trim()).filter(Boolean) : [];
-    }
-  };
-
-  const getMainImage = (images: string) =>
-    parseImages(images)[0] || "https://placehold.co/600x400/e2e8f0/94a3b8?text=Property";
 
   // Calculate distance between two points in km
   const getDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
@@ -263,9 +252,8 @@ export default function MapSearch() {
                     onClick={() => setSelectedProperty(property)}
                   >
                     <div className="flex gap-3">
-                      <img
-                        src={getMainImage(property.images)}
-                        alt={property.title}
+                      <PropertyCoverMedia
+                        property={property}
                         className="w-24 h-20 object-cover rounded-lg shrink-0"
                       />
                       <div className="flex-1 min-w-0">
@@ -414,9 +402,8 @@ export default function MapSearch() {
                   </button>
 
                   <div className="relative h-40 overflow-hidden rounded-t-lg">
-                    <img
-                      src={getMainImage(selectedProperty.images)}
-                      alt={selectedProperty.title}
+                    <PropertyCoverMedia
+                      property={selectedProperty}
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute top-3 left-3">

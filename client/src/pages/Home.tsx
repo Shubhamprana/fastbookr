@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { PropertyCoverMedia } from "@/components/PropertyCoverMedia";
 import { trpc } from "@/lib/trpc";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -124,27 +125,15 @@ export default function Home() {
     setLocation(`/properties?${params.toString()}`);
   };
 
-  const parseImages = (images: string) => {
-    try {
-      const parsed = JSON.parse(images);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  };
-
   // Property Card Component
   const PropertyCard = ({ property, featured = false }: { property: any; featured?: boolean }) => {
-    const images = parseImages(property.images);
-    const mainImage = images[0] || "https://placehold.co/600x400/e2e8f0/94a3b8?text=Property";
     const stats = getPropertyStats(property);
     return (
       <Link href={`/properties/${property.id}`}>
         <Card className={`group overflow-hidden border border-gray-100 hover:shadow-xl transition-all duration-300 cursor-pointer ${featured ? "" : ""}`}>
           <div className={`relative overflow-hidden ${featured ? "h-64" : "h-52"}`}>
-            <img
-              src={mainImage}
-              alt={property.title}
+            <PropertyCoverMedia
+              property={property}
               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
             />
             <div className="absolute top-3 left-3 flex gap-2">

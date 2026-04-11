@@ -130,7 +130,7 @@ export default function SubmitListing() {
         longitude: prefilled.longitude ? parseFloat(prefilled.longitude) : null,
       });
     } catch {
-      toast.error("Please check your images and numeric fields.");
+      toast.error("Please check your media and numeric fields.");
     }
   };
 

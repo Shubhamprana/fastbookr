@@ -223,7 +223,7 @@ export function PropertyForm({
           required
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          Write at least 10 characters so the listing is descriptive enough for renters and buyers.
+          A short description is fine, but add a few details when you can.
         </p>
       </div>
 
@@ -677,13 +677,13 @@ export function PropertyForm({
 
       {/* Image Upload Section */}
       <div>
-        <Label>Property Images *</Label>
+        <Label>Property Images</Label>
         <ImageUploader
           images={imageUrls}
           onImagesChange={handleImagesChange}
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          Add up to 4 images for the listing. The first uploaded image is used as the cover across cards and search results.
+          Add up to 4 images for the listing. If you skip images and upload only a video, the video will be used as the cover across cards and search results.
         </p>
       </div>
 
@@ -694,7 +694,7 @@ export function PropertyForm({
           onVideoChange={(url) => updateField("videoUrl", url)}
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          Optional. Add one short walkthrough video. Images appear in the gallery and cards, while the video shows on the property details page.
+          Optional. Add one short walkthrough video. At least one image or one video is required to submit the listing.
         </p>
       </div>
 

@@ -244,7 +244,12 @@ export const appRouter = router({
         const { uploadPropertyImage } = await import("./db.js");
         const { nanoid } = await import('nanoid');
         const suffix = nanoid(8);
-        const ext = input.filename.split('.').pop() || 'jpg';
+        const ext =
+          input.contentType === "image/png"
+            ? "png"
+            : input.contentType === "image/webp"
+              ? "webp"
+              : "jpg";
         const key = `property-images/${Date.now()}-${suffix}.${ext}`;
         const buffer = Buffer.from(input.base64, 'base64');
         const { url } = await uploadPropertyImage(key, buffer, input.contentType);

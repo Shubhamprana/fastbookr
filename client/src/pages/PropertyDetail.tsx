@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { MapView } from "@/components/Map";
+import { getPropertyVideoUrl, parsePropertyImages, PROPERTY_MEDIA_PLACEHOLDER } from "@/lib/propertyMedia";
 import {
   formatAreaValue,
   getAreaLabel,
@@ -143,24 +144,9 @@ export default function PropertyDetail() {
     );
   }
 
-  // Parse images - handle both JSON array strings and plain comma-separated URLs
-  const parseImages = (imagesStr: string): string[] => {
-    try {
-      // Try parsing as JSON first
-      const parsed = JSON.parse(imagesStr);
-      return Array.isArray(parsed) ? parsed : [parsed];
-    } catch {
-      // If JSON parsing fails, check if it's a plain URL or comma-separated URLs
-      if (imagesStr.includes(',')) {
-        return imagesStr.split(',').map(url => url.trim()).filter(url => url.length > 0);
-      }
-      // Single URL
-      return [imagesStr];
-    }
-  };
-  
-  const images = parseImages(property.images as string);
-  const videoUrl = typeof property.videoUrl === "string" ? property.videoUrl : "";
+  const images = parsePropertyImages(property.images);
+  const videoUrl = getPropertyVideoUrl(property.videoUrl);
+  const hasGalleryImages = images.length > 0;
   const propertyStats = getPropertyStats(property);
   const additionalDetails = getPropertyAdditionalDetails(property);
   const hasOwnerContact = Boolean(property.ownerName || property.ownerPhone || property.ownerEmail);
@@ -206,12 +192,27 @@ export default function PropertyDetail() {
               {/* Image Gallery */}
               <div className="mb-8">
                 <div className="relative h-80 md:h-[480px] rounded-2xl overflow-hidden shadow-lg">
-                  <img
-                    src={images[currentImageIndex]}
-                    alt={property.title}
-                    className="w-full h-full object-cover"
-                  />
-                  {images.length > 1 && (
+                  {hasGalleryImages ? (
+                    <img
+                      src={images[currentImageIndex]}
+                      alt={property.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : videoUrl ? (
+                    <video
+                      src={videoUrl}
+                      controls
+                      playsInline
+                      className="w-full h-full object-cover bg-black"
+                    />
+                  ) : (
+                    <img
+                      src={PROPERTY_MEDIA_PLACEHOLDER}
+                      alt={property.title}
+                      className="w-full h-full object-cover"
+                    />
+                  )}
+                  {images.length > 1 && hasGalleryImages && (
                     <>
                       <button
                         onClick={prevImage}
@@ -248,7 +249,7 @@ export default function PropertyDetail() {
                 </div>
 
                 {/* Thumbnails */}
-                {images.length > 1 && (
+                {images.length > 1 && hasGalleryImages && (
                   <div className="grid grid-cols-4 md:grid-cols-6 gap-2 mt-3">
                     {images.map((img, idx) => (
                       <button
@@ -264,7 +265,7 @@ export default function PropertyDetail() {
                   </div>
                 )}
 
-                {videoUrl && (
+                {videoUrl && hasGalleryImages && (
                   <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                     <div className="mb-3">
                       <h3 className="text-base font-semibold text-foreground">Video Tour</h3>

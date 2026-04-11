@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  MAX_PROPERTY_IMAGE_UPLOAD_BYTES,
+  MAX_PROPERTY_IMAGE_UPLOAD_MB,
+} from "../shared/const.js";
 
 const propertyTypeValues = [
   "house",
@@ -57,6 +61,17 @@ function usesBathroomCount(propertyType: string) {
 const nullableString = z.string().trim().nullable().optional();
 const rejectionReasonSchema = z.string().trim().max(1000).nullable().optional();
 
+function getDecodedBase64ByteLength(value: string) {
+  const normalized = value.replace(/\s+/g, "");
+  const paddingLength = normalized.endsWith("==")
+    ? 2
+    : normalized.endsWith("=")
+      ? 1
+      : 0;
+
+  return Math.max(0, Math.floor((normalized.length * 3) / 4) - paddingLength);
+}
+
 export const idInputSchema = z.object({
   id: z.number().int().positive(),
 });
@@ -78,7 +93,7 @@ export const propertySearchInputSchema = z.object({
 const basePropertySchema = z
   .object({
     title: z.string().trim().min(3).max(150),
-    description: z.string().trim().min(10, "Description must be at least 10 characters.").max(5000),
+    description: z.string().trim().min(3, "Description must be at least 3 characters.").max(5000),
     price: z.number().int().positive(),
     location: z.string().trim().min(3).max(255),
     city: z.string().trim().min(2).max(100),
@@ -90,7 +105,7 @@ const basePropertySchema = z
     bathrooms: z.number().int().nonnegative(),
     squareFeet: z.number().int().positive(),
     areaText: z.string().trim().min(1).max(100).nullable().optional(),
-    images: z.array(z.string().url()).min(1).max(4),
+    images: z.array(z.string().url()).max(4),
     videoUrl: z.string().url().nullable().optional(),
     furnishing: z.enum(furnishingValues).nullable().optional(),
     parking: z.enum(parkingValues).nullable().optional(),
@@ -175,6 +190,14 @@ const basePropertySchema = z
         message: "Rejection reason is required for rejected listings.",
       });
     }
+
+    if (value.images.length === 0 && !value.videoUrl?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["images"],
+        message: "Upload at least one image or one video.",
+      });
+    }
   });
 
 export const ownerPropertyInputSchema = basePropertySchema.safeExtend({
@@ -226,6 +249,14 @@ export const imageUploadInputSchema = mediaUploadInputSchema.superRefine((value,
       code: z.ZodIssueCode.custom,
       path: ["contentType"],
       message: "Only image uploads are allowed here.",
+    });
+  }
+
+  if (getDecodedBase64ByteLength(value.base64) > MAX_PROPERTY_IMAGE_UPLOAD_BYTES) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["base64"],
+      message: `Image uploads must be ${MAX_PROPERTY_IMAGE_UPLOAD_MB}MB or smaller.`,
     });
   }
 });

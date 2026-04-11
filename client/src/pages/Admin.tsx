@@ -58,7 +58,7 @@ export default function Admin() {
     bedrooms: "",
     bathrooms: "",
     squareFeet: "",
-    images: "",
+    images: "[]",
     videoUrl: "",
     furnishing: "",
     parking: "",
@@ -203,7 +203,7 @@ export default function Admin() {
       bedrooms: "",
       bathrooms: "",
       squareFeet: "",
-      images: "",
+      images: "[]",
       videoUrl: "",
       furnishing: "",
       parking: "",
@@ -315,7 +315,7 @@ export default function Admin() {
         createProperty.mutate(propertyData);
       }
     } catch (error) {
-      toast.error("Invalid JSON format for images");
+      toast.error("Please check your media fields.");
     }
   };
 

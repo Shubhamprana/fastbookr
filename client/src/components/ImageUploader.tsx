@@ -1,11 +1,44 @@
 import { useState, useRef, useCallback } from "react";
-import { Button } from "@/components/ui/button";
 import { Upload, X, Loader2, Image as ImageIcon } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { formatAppErrorMessage } from "@/lib/errors";
+import { prepareImageForUpload } from "@/lib/imageUpload";
+import { MAX_PROPERTY_IMAGE_UPLOAD_MB } from "@shared/const";
 import { toast } from "sonner";
 
 const MAX_IMAGE_COUNT = 4;
-const MAX_IMAGE_SIZE_MB = 10;
+const RETRYABLE_UPLOAD_PATTERNS = [
+  "failed to fetch",
+  "networkerror",
+  "network request failed",
+  "timeout",
+  "temporarily unavailable",
+  "502",
+  "503",
+  "504",
+];
+
+function shouldRetryUpload(error: unknown) {
+  const message = formatAppErrorMessage(error, "Upload failed.").toLowerCase();
+  return RETRYABLE_UPLOAD_PATTERNS.some(pattern => message.includes(pattern));
+}
+
+async function delay(ms: number) {
+  await new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function formatImageUploadError(error: unknown, fileName: string) {
+  const rawMessage = formatAppErrorMessage(error, "Upload failed.");
+
+  if (
+    rawMessage.includes("is not valid JSON") &&
+    rawMessage.includes('"Request')
+  ) {
+    return `Failed to upload ${fileName}: the image is too large for the current upload flow. Please use an image under ${MAX_PROPERTY_IMAGE_UPLOAD_MB}MB.`;
+  }
+
+  return `Failed to upload ${fileName}: ${rawMessage}`;
+}
 
 interface ImageUploaderProps {
   images: string[];
@@ -16,6 +49,7 @@ export function ImageUploader({ images, onImagesChange }: ImageUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState<number>(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [statusText, setStatusText] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadImage = trpc.upload.image.useMutation();
 
@@ -47,48 +81,54 @@ export function ImageUploader({ images, onImagesChange }: ImageUploaderProps) {
     const limitedFiles = fileArray.slice(0, availableSlots);
 
     setUploading(prev => prev + limitedFiles.length);
+    setStatusText("Preparing images for upload...");
     const nextImages = [...images];
 
     for (const file of limitedFiles) {
-      if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
-        const message = `${file.name} is larger than ${MAX_IMAGE_SIZE_MB}MB.`;
-        setUploadError(message);
-        toast.error(message);
-        setUploading(prev => prev - 1);
-        continue;
-      }
-
       try {
-        // Convert to base64
-        const reader = new FileReader();
-        const base64 = await new Promise<string>((resolve, reject) => {
-          reader.onload = () => {
-            const result = reader.result as string;
-            // Remove data URL prefix to get pure base64
-            const base64Data = result.split(",")[1];
-            resolve(base64Data);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
+        setStatusText(`Optimizing ${file.name}...`);
+        const prepared = await prepareImageForUpload(file);
+        setStatusText(`Uploading ${file.name}...`);
 
-        const result = await uploadImage.mutateAsync({
-          base64,
-          filename: file.name,
-          contentType: file.type,
-        });
+        let result: Awaited<ReturnType<typeof uploadImage.mutateAsync>>;
+
+        try {
+          result = await uploadImage.mutateAsync({
+            base64: prepared.base64,
+            filename: file.name,
+            contentType: prepared.contentType,
+          });
+        } catch (error) {
+          if (!shouldRetryUpload(error)) {
+            throw error;
+          }
+
+          setStatusText(`Retrying ${file.name}...`);
+          await delay(800);
+          result = await uploadImage.mutateAsync({
+            base64: prepared.base64,
+            filename: file.name,
+            contentType: prepared.contentType,
+          });
+        }
 
         nextImages.push(result.url);
         onImagesChange([...nextImages]);
+        if (prepared.didOptimize) {
+          toast.success(`Uploaded ${file.name} after optimizing it for mobile upload`);
+          continue;
+        }
         toast.success(`Uploaded ${file.name}`);
       } catch (error: any) {
-        const message = `Failed to upload ${file.name}: ${error.message}`;
+        const message = formatImageUploadError(error, file.name);
         setUploadError(message);
         toast.error(message);
       } finally {
         setUploading(prev => prev - 1);
       }
     }
+
+    setStatusText(null);
   }, [images, onImagesChange, uploadImage]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -146,7 +186,7 @@ export function ImageUploader({ images, onImagesChange }: ImageUploaderProps) {
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-sm text-muted-foreground">
-              Uploading {uploading} image{uploading > 1 ? "s" : ""}...
+              {statusText ?? `Uploading ${uploading} image${uploading > 1 ? "s" : ""}...`}
             </p>
           </div>
         ) : (
@@ -156,7 +196,7 @@ export function ImageUploader({ images, onImagesChange }: ImageUploaderProps) {
               Drag & drop images here, or click to browse
             </p>
             <p className="text-xs text-muted-foreground">
-              Upload up to {MAX_IMAGE_COUNT} images. Supports JPG, PNG, WebP up to {MAX_IMAGE_SIZE_MB}MB each.
+              Upload up to {MAX_IMAGE_COUNT} images. Large photos are automatically optimized before upload.
             </p>
           </div>
         )}

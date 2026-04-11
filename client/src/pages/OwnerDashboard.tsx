@@ -256,7 +256,7 @@ export default function OwnerDashboard() {
         longitude: formData.longitude ? parseFloat(formData.longitude) : null,
       });
     } catch {
-      toast.error("Please check your images and numeric fields.");
+      toast.error("Please check your media and numeric fields.");
     }
   };
 

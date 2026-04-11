@@ -27,7 +27,7 @@ async function updateBucketForPublicRead() {
   await storage.updateBucket({
     bucketId,
     name: bucket.name,
-    permissions: [Permission.read(Role.any())],
+    permissions: [Permission.read(Role.any()), Permission.create(Role.users())],
     fileSecurity: true,
     enabled: bucket.enabled,
     maximumFileSize: Math.max(bucket.maximumFileSize ?? 0, minimumMaxFileSize),
@@ -40,7 +40,7 @@ async function updateBucketForPublicRead() {
     transformations: bucket.transformations,
   });
 
-  console.log(`Updated bucket '${bucketId}' for public image reads.`);
+  console.log(`Updated bucket '${bucketId}' for public media reads and authenticated uploads.`);
 }
 
 async function updateExistingFiles() {

@@ -3,6 +3,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
+import { PropertyCoverMedia } from "@/components/PropertyCoverMedia";
 import { trpc } from "@/lib/trpc";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -36,10 +37,6 @@ export default function Properties() {
 
   const formatPrice = (price: number) =>
     (price / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0 });
-
-  const parseImages = (images: string) => {
-    try { const p = JSON.parse(images); return Array.isArray(p) ? p : []; } catch { return []; }
-  };
 
   const clearFilters = () => {
     setPropertyType("all");
@@ -191,14 +188,15 @@ export default function Properties() {
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {properties?.map((property: any) => {
-                const images = parseImages(property.images);
-                const mainImage = images[0] || "https://placehold.co/600x400/e2e8f0/94a3b8?text=Property";
                 const stats = getPropertyStats(property);
                 return (
                   <Link key={property.id} href={`/properties/${property.id}`}>
                     <Card className="group overflow-hidden border border-gray-100 hover:shadow-xl transition-all duration-300 cursor-pointer">
                       <div className="relative h-52 overflow-hidden">
-                        <img src={mainImage} alt={property.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                        <PropertyCoverMedia
+                          property={property}
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        />
                         <div className="absolute top-3 left-3">
                           <span className={`px-3 py-1 rounded-full text-xs font-semibold text-white ${property.listingType === "sale" ? "bg-primary" : "bg-blue-500"}`}>
                             {property.listingType === "sale" ? "For Sale" : property.listingType === "rent" ? "For Rent" : "Co-Living"}
@@ -242,15 +240,16 @@ export default function Properties() {
           ) : (
             <div className="space-y-4">
               {properties?.map((property: any) => {
-                const images = parseImages(property.images);
-                const mainImage = images[0] || "https://placehold.co/600x400/e2e8f0/94a3b8?text=Property";
                 const stats = getPropertyStats(property);
                 return (
                   <Link key={property.id} href={`/properties/${property.id}`}>
                     <Card className="group overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300 cursor-pointer">
                       <div className="flex flex-col md:flex-row">
                         <div className="relative w-full md:w-80 h-52 md:h-auto overflow-hidden shrink-0">
-                          <img src={mainImage} alt={property.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                          <PropertyCoverMedia
+                            property={property}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
                           <span className={`absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-semibold text-white ${property.listingType === "sale" ? "bg-primary" : "bg-blue-500"}`}>
                             {property.listingType === "sale" ? "For Sale" : "For Rent"}
                           </span>
